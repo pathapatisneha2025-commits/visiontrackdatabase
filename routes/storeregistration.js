@@ -8,22 +8,19 @@ const pool = require("../db");
 // ======================================
 // PAYMENT SUCCESS + STORE CREATION API
 // ======================================
+router.post("/payment-success", async (req, res) => {
 
-router.post("/payment-success", async(req,res)=>{
-
-
-try{
-
+try {
 
 const {
-storeData,
-plan,
-payment
-}=req.body;
+  storeData,
+  plan,
+  payment
+} = req.body;
 
 
-
-const result=await pool.query(
+// First insert store without store_code
+const result = await pool.query(
 
 `
 INSERT INTO stores
@@ -64,6 +61,31 @@ payment.razorpay_payment_id || payment.transaction_id
 
 ]
 
+);
+
+
+// Generate Store Code using ID
+
+const storeId = result.rows[0].id;
+
+const storeCode = 
+"STORE" + String(storeId).padStart(3, "0");
+
+
+// Update store code
+
+await pool.query(
+
+`
+UPDATE stores
+SET store_code=$1
+WHERE id=$2
+`,
+
+[
+storeCode,
+storeId
+]
 
 );
 
@@ -73,7 +95,9 @@ res.json({
 
 success:true,
 
-storeId:result.rows[0].id
+storeId: storeId,
+
+storeCode: storeCode
 
 });
 
@@ -81,7 +105,6 @@ storeId:result.rows[0].id
 }
 
 catch(error){
-
 
 console.log(error);
 
