@@ -163,176 +163,126 @@ message:"Store creation failed"
 
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", async(req,res)=>{
 
-    try {
+try{
 
 
-        const {
-            storeCode,
-            email,
-            password
-        } = req.body;
+const {
+email,
+password
+}=req.body;
 
 
 
-        // ==============================
-        // FIND STORE
-        // ==============================
+// FIND STORE BY EMAIL
 
-        const result = await pool.query(
+const result = await pool.query(
 
-            `
-            SELECT *
-            FROM stores
-            WHERE store_code=$1
-            AND email=$2
-            AND subscription_status='ACTIVE'
-            `,
+`
+SELECT *
+FROM stores
+WHERE email=$1
+AND subscription_status='ACTIVE'
+`,
 
-            [
-                storeCode,
-                email
-            ]
+[
+email
+]
 
-        );
+);
 
 
 
-        // ==============================
-        // CHECK STORE EXISTS
-        // ==============================
+if(result.rows.length===0){
 
-        if (result.rows.length === 0) {
+return res.status(401).json({
 
-            return res.status(401).json({
+success:false,
+message:"Email not registered"
 
-                success:false,
+});
 
-                message:"Invalid store code or email"
+}
 
-            });
 
-        }
 
+const store = result.rows[0];
 
 
 
-        const store = result.rows[0];
 
+// CHECK PASSWORD
 
+const passwordMatch = await bcrypt.compare(
 
-        // ==============================
-        // VERIFY PASSWORD
-        // ==============================
+password,
 
-        const passwordMatch = await bcrypt.compare(
+store.password
 
-            password,
+);
 
-            store.password
 
-        );
 
+if(!passwordMatch){
 
+return res.status(401).json({
 
-        if (!passwordMatch) {
+success:false,
+message:"Invalid password"
 
-            return res.status(401).json({
+});
 
-                success:false,
+}
 
-                message:"Invalid password"
 
-            });
 
-        }
 
+// LOGIN SUCCESS RESPONSE
 
+res.json({
 
+success:true,
 
+message:"Login successful",
 
-        // ==============================
-        // CREATE JWT TOKEN
-        // ==============================
 
-        const token = jwt.sign(
+store:{
 
-            {
+id:store.id,
 
-                storeId: store.id,
+storeCode:store.store_code,
 
-                storeCode: store.store_code,
+storeName:store.store_name,
 
-                email: store.email
+ownerName:store.owner_name,
 
-            },
+email:store.email
 
-            process.env.JWT_SECRET,
+}
 
-            {
 
-                expiresIn:"7d"
+});
 
-            }
 
-        );
 
+}
 
+catch(error){
 
+console.log("Login Error:",error);
 
 
-        // ==============================
-        // LOGIN SUCCESS RESPONSE
-        // ==============================
+res.status(500).json({
 
-        res.json({
+success:false,
 
-            success:true,
+message:"Login failed"
 
-            message:"Login successful",
+});
 
-            token:token,
 
-
-            store:{
-
-                id:store.id,
-
-                storeCode:store.store_code,
-
-                storeName:store.store_name,
-
-                ownerName:store.owner_name,
-
-                email:store.email
-
-            }
-
-        });
-
-
-
-    }
-
-
-    catch(error){
-
-
-        console.log("Login Error:", error);
-
-
-
-        res.status(500).json({
-
-            success:false,
-
-            message:"Login failed"
-
-        });
-
-
-    }
+}
 
 
 });
