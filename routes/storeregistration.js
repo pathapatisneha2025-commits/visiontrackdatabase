@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 
-const crypto = require("crypto");
 const pool = require("../db");
 
 
@@ -10,7 +9,10 @@ const pool = require("../db");
 // PAYMENT SUCCESS + STORE CREATION API
 // ======================================
 
-router.post("/payment-success",async(req,res)=>{
+router.post("/payment-success", async(req,res)=>{
+
+
+try{
 
 
 const {
@@ -58,7 +60,7 @@ plan.price,
 
 "ACTIVE",
 
-payment.razorpay_payment_id
+payment.razorpay_payment_id || payment.transaction_id
 
 ]
 
@@ -76,7 +78,84 @@ storeId:result.rows[0].id
 });
 
 
+}
+
+catch(error){
+
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Store creation failed"
+
 });
+
+
+}
+
+
+});
+
+
+
+
+// ======================================
+// GET ALL STORES
+// ======================================
+
+router.get("/stores", async(req,res)=>{
+
+
+try{
+
+
+const result = await pool.query(
+
+`
+SELECT *
+FROM stores
+ORDER BY id DESC
+`
+
+);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+}
+
+catch(error){
+
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to fetch stores"
+
+});
+
+
+}
+
+
+});
+
 
 
 
