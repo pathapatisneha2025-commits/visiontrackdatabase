@@ -163,7 +163,179 @@ message:"Store creation failed"
 
 });
 
+router.post("/login", async (req, res) => {
 
+    try {
+
+
+        const {
+            storeCode,
+            email,
+            password
+        } = req.body;
+
+
+
+        // ==============================
+        // FIND STORE
+        // ==============================
+
+        const result = await pool.query(
+
+            `
+            SELECT *
+            FROM stores
+            WHERE store_code=$1
+            AND email=$2
+            AND subscription_status='ACTIVE'
+            `,
+
+            [
+                storeCode,
+                email
+            ]
+
+        );
+
+
+
+        // ==============================
+        // CHECK STORE EXISTS
+        // ==============================
+
+        if (result.rows.length === 0) {
+
+            return res.status(401).json({
+
+                success:false,
+
+                message:"Invalid store code or email"
+
+            });
+
+        }
+
+
+
+
+        const store = result.rows[0];
+
+
+
+        // ==============================
+        // VERIFY PASSWORD
+        // ==============================
+
+        const passwordMatch = await bcrypt.compare(
+
+            password,
+
+            store.password
+
+        );
+
+
+
+        if (!passwordMatch) {
+
+            return res.status(401).json({
+
+                success:false,
+
+                message:"Invalid password"
+
+            });
+
+        }
+
+
+
+
+
+        // ==============================
+        // CREATE JWT TOKEN
+        // ==============================
+
+        const token = jwt.sign(
+
+            {
+
+                storeId: store.id,
+
+                storeCode: store.store_code,
+
+                email: store.email
+
+            },
+
+            process.env.JWT_SECRET,
+
+            {
+
+                expiresIn:"7d"
+
+            }
+
+        );
+
+
+
+
+
+        // ==============================
+        // LOGIN SUCCESS RESPONSE
+        // ==============================
+
+        res.json({
+
+            success:true,
+
+            message:"Login successful",
+
+            token:token,
+
+
+            store:{
+
+                id:store.id,
+
+                storeCode:store.store_code,
+
+                storeName:store.store_name,
+
+                ownerName:store.owner_name,
+
+                email:store.email
+
+            }
+
+        });
+
+
+
+    }
+
+
+    catch(error){
+
+
+        console.log("Login Error:", error);
+
+
+
+        res.status(500).json({
+
+            success:false,
+
+            message:"Login failed"
+
+        });
+
+
+    }
+
+
+});
 
 
 // ======================================
