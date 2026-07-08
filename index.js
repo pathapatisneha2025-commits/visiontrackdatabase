@@ -3,6 +3,7 @@ const cors = require("cors");
 const Registration = require("./routes/storeregistration.js");
 const Patient = require("./routes/Patient.js");
 const EyeExam = require("./routes/eyeexam.js");
+const OpticalOrders = require("./routes/opticalorders.js");
 
 
 
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use("/registration",Registration );
 app.use("/patient",Patient );
 app.use("/eyeexam",EyeExam );
+app.use("/opticalorders",OpticalOrders );
 
 
 
