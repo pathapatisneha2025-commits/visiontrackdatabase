@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const Registration = require("./routes/storeregistration.js");
+const Patient = require("./routes/Patient.js");
 
 
 
@@ -14,6 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/registration",Registration );
+app.use("/patient",Patient );
 
 
 
