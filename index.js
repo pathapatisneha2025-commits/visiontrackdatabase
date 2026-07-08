@@ -5,6 +5,7 @@ const Patient = require("./routes/Patient.js");
 const EyeExam = require("./routes/eyeexam.js");
 const OpticalOrders = require("./routes/opticalorders.js");
 const StockInventory = require("./routes/stockinventory.js");
+const FollowUps = require("./routes/followups.js");
 
 
 
@@ -22,6 +23,7 @@ app.use("/patient",Patient );
 app.use("/eyeexam",EyeExam );
 app.use("/opticalorders",OpticalOrders );
 app.use("/stockinventory",StockInventory );
+app.use("/followups",FollowUps );
 
 
 
