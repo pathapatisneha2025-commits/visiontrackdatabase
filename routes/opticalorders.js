@@ -502,18 +502,24 @@ message:"Error updating status"
 
 router.put("/orders/delete/:id", async(req,res)=>{
 
+try{
+
 const {id}=req.params;
 
 const adminId=req.body.user_id;
 
 
+// Soft delete order
+
 await pool.query(
 `
 UPDATE optical_orders
+
 SET
 is_deleted=true,
 deleted_at=NOW(),
 deleted_by=$1
+
 WHERE id=$2
 `,
 [
@@ -522,6 +528,9 @@ id
 ]
 );
 
+
+
+// Save into delete history
 
 await pool.query(
 `
@@ -535,12 +544,15 @@ deleted_by
 )
 
 SELECT
-'Orders',
+
+'Optical Sales',
 id,
 order_no,
-customer_name,
+patient_name,
 $1
-FROM orders
+
+FROM optical_orders
+
 WHERE id=$2
 
 `,
@@ -551,10 +563,30 @@ id
 );
 
 
+
 res.json({
+
 success:true,
+
 message:"Order moved to delete history"
+
 });
+
+
+}
+
+catch(error){
+
+console.log(error);
+
+res.status(500).json({
+
+success:false,
+error:error.message
+
+});
+
+}
 
 
 });
