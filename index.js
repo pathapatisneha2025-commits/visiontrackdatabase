@@ -6,6 +6,8 @@ const EyeExam = require("./routes/eyeexam.js");
 const OpticalOrders = require("./routes/opticalorders.js");
 const StockInventory = require("./routes/stockinventory.js");
 const FollowUps = require("./routes/followups.js");
+const SubscriptionPlans = require("./routes/subscriptionplans.js");
+
 
 
 
@@ -24,6 +26,7 @@ app.use("/eyeexam",EyeExam );
 app.use("/opticalorders",OpticalOrders );
 app.use("/stockinventory",StockInventory );
 app.use("/followups",FollowUps );
+app.use("/subscriptionplans",SubscriptionPlans );
 
 
 
