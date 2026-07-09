@@ -360,7 +360,83 @@ error:error.message
 
 
 
+router.get("/delete-history", async(req,res)=>{
 
+try{
+
+const {
+storeCode,
+search=""
+}=req.query;
+
+
+if(!storeCode){
+
+return res.status(400).json({
+
+success:false,
+message:"Store code required"
+
+});
+
+}
+
+
+
+const result = await pool.query(
+
+`
+SELECT *
+
+FROM delete_history
+
+WHERE store_code=$1
+
+AND
+(
+record_no ILIKE $2
+OR customer_name ILIKE $2
+OR module ILIKE $2
+)
+
+ORDER BY deleted_at DESC
+
+`,
+[
+storeCode,
+`%${search}%`
+]
+
+);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+}
+
+catch(error){
+
+console.log(error);
+
+res.status(500).json({
+
+success:false,
+
+error:error.message
+
+});
+
+}
+
+});
 
 
 
@@ -599,83 +675,7 @@ error:error.message
 // GET DELETE HISTORY BY STORE
 // =====================================
 
-router.get("/delete-history", async(req,res)=>{
 
-try{
-
-const {
-storeCode,
-search=""
-}=req.query;
-
-
-if(!storeCode){
-
-return res.status(400).json({
-
-success:false,
-message:"Store code required"
-
-});
-
-}
-
-
-
-const result = await pool.query(
-
-`
-SELECT *
-
-FROM delete_history
-
-WHERE store_code=$1
-
-AND
-(
-record_no ILIKE $2
-OR customer_name ILIKE $2
-OR module ILIKE $2
-)
-
-ORDER BY deleted_at DESC
-
-`,
-[
-storeCode,
-`%${search}%`
-]
-
-);
-
-
-
-res.json({
-
-success:true,
-
-data:result.rows
-
-});
-
-
-}
-
-catch(error){
-
-console.log(error);
-
-res.status(500).json({
-
-success:false,
-
-error:error.message
-
-});
-
-}
-
-});
 // =====================================
 // RESTORE OPTICAL ORDER
 // =====================================
