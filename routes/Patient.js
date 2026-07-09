@@ -313,7 +313,163 @@ success:false
 });
 
 
+// DELETE PATIENT
+router.delete("/delete/:id", async(req,res)=>{
 
+try{
+
+
+const patientId=req.params.id;
+
+
+const {
+storeCode
+}=req.body;
+
+
+
+if(!storeCode){
+
+return res.status(400).json({
+
+success:false,
+message:"Store code required"
+
+});
+
+}
+
+
+
+// get patient before delete
+
+const patientResult = await pool.query(
+
+`
+SELECT *
+FROM patients
+WHERE id=$1
+AND store_code=$2
+`,
+[
+patientId,
+storeCode
+]
+
+);
+
+
+
+if(patientResult.rows.length===0){
+
+return res.status(404).json({
+
+success:false,
+message:"Patient not found"
+
+});
+
+}
+
+
+
+const patient=patientResult.rows[0];
+
+
+
+// delete patient
+
+await pool.query(
+
+`
+DELETE FROM patients
+WHERE id=$1
+AND store_code=$2
+
+`,
+[
+patientId,
+storeCode
+]
+
+);
+
+
+
+
+
+// insert audit log
+
+await pool.query(
+
+`
+INSERT INTO delete_history
+(
+module,
+record_id,
+record_no,
+customer_name,
+deleted_by,
+store_code
+)
+
+VALUES
+(
+$1,$2,$3,$4,$5,$6
+)
+
+`,
+[
+
+"Patients",
+
+patient.id,
+
+patient.patient_no || `PT${patient.id}`,
+
+patient.name,
+
+"Admin",
+
+storeCode
+
+]
+
+);
+
+
+
+
+
+res.json({
+
+success:true,
+
+message:"Patient deleted successfully"
+
+});
+
+
+
+}
+catch(error){
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+error:error.message
+
+});
+
+
+}
+
+
+});
 
 
 module.exports=router;
