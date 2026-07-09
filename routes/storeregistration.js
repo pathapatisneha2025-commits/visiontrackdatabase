@@ -35,11 +35,9 @@ const hashedPassword = await bcrypt.hash(
 
 const expiryDate = new Date();
 
-
 expiryDate.setDate(
   expiryDate.getDate() + (plan.durationDays || 30)
 );
-
 
 
 
@@ -72,7 +70,6 @@ RETURNING id
 
 [
 
-
 storeData.storeName,
 
 storeData.ownerName,
@@ -92,7 +89,6 @@ plan.price,
 payment.razorpay_payment_id || payment.transaction_id,
 
 expiryDate
-
 
 ]
 
@@ -137,6 +133,63 @@ storeId
 
 ]
 
+);
+
+
+
+
+
+
+
+// ===============================
+// INSERT PAYMENT HISTORY
+// ===============================
+
+
+await pool.query(
+
+`
+INSERT INTO subscription_payments
+(
+store_code,
+invoice_no,
+transaction_id,
+payment_method,
+amount,
+plan_name,
+payment_status
+)
+
+VALUES
+($1,$2,$3,$4,$5,$6,$7)
+
+`,
+
+[
+
+
+storeCode,
+
+
+"INV-"+Date.now(),
+
+
+payment.razorpay_payment_id || payment.transaction_id,
+
+
+payment.method || "UPI",
+
+
+plan.price,
+
+
+plan.name,
+
+
+"SUCCESS"
+
+
+]
 
 );
 
@@ -159,6 +212,7 @@ expiryDate:expiryDate,
 message:"Store created successfully"
 
 });
+
 
 
 
@@ -384,6 +438,268 @@ message:"Failed to fetch stores"
 });
 
 
+// ======================================
+// GET PAYMENT HISTORY BY STORE CODE
+// ======================================
+
+router.get("/payment-history", async(req,res)=>{
+
+try{
 
 
+const {storeCode}=req.query;
+
+
+
+if(!storeCode){
+
+return res.status(400).json({
+
+success:false,
+
+message:"Store code required"
+
+});
+
+}
+
+
+
+
+const result = await pool.query(
+
+`
+SELECT
+id,
+store_code,
+invoice_no,
+transaction_id,
+payment_method,
+amount,
+plan_name,
+payment_status,
+created_at
+
+FROM subscription_payments
+
+WHERE store_code=$1
+
+ORDER BY created_at DESC
+
+`,
+
+[
+
+storeCode
+
+]
+
+);
+
+
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+
+}
+
+catch(error){
+
+
+console.log("Payment History Error:",error);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to fetch payment history"
+
+});
+
+
+}
+
+
+});
+
+
+// ======================================
+// SIMPLE SUBSCRIPTION RENEWAL
+// ======================================
+
+router.post("/renew-subscription", async(req,res)=>{
+
+try{
+
+const {
+storeCode
+}=req.body;
+
+
+// Find store
+
+const storeResult = await pool.query(
+`
+SELECT *
+FROM stores
+WHERE store_code=$1
+`,
+[
+storeCode
+]
+);
+
+
+
+if(storeResult.rows.length===0){
+
+return res.json({
+
+success:false,
+
+message:"Store not found"
+
+});
+
+}
+
+
+
+const store = storeResult.rows[0];
+
+
+
+// Calculate new expiry
+
+let expiryDate = new Date(store.expiry_date);
+
+
+// If expired, start from today
+
+if(expiryDate < new Date()){
+
+expiryDate = new Date();
+
+}
+
+
+// Add 30 days
+
+expiryDate.setDate(
+expiryDate.getDate()+30
+);
+
+
+
+
+// Update store
+
+await pool.query(
+
+`
+UPDATE stores
+
+SET
+subscription_status='ACTIVE',
+expiry_date=$1
+
+WHERE store_code=$2
+
+`,
+
+[
+expiryDate,
+storeCode
+]
+
+);
+
+
+
+
+// Insert payment history
+
+await pool.query(
+
+`
+INSERT INTO subscription_payments
+(
+store_code,
+invoice_no,
+transaction_id,
+payment_method,
+amount,
+plan_name,
+payment_status
+)
+
+VALUES
+($1,$2,$3,$4,$5,$6,$7)
+
+`,
+
+[
+
+storeCode,
+
+"INV-"+Date.now(),
+
+"MANUAL_RENEW",
+
+"OFFLINE",
+
+store.amount,
+
+store.plan_name,
+
+"SUCCESS"
+
+]
+
+);
+
+
+
+res.json({
+
+success:true,
+
+message:"Subscription renewed successfully",
+
+expiryDate
+
+});
+
+
+}
+
+catch(error){
+
+console.log("Renew Error:",error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Renewal failed"
+
+});
+
+
+}
+
+
+});
 module.exports = router;
