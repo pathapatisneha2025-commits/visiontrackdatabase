@@ -31,6 +31,19 @@ const hashedPassword = await bcrypt.hash(
 
 
 
+// Calculate Expiry Date
+
+const expiryDate = new Date();
+
+
+expiryDate.setDate(
+  expiryDate.getDate() + (plan.durationDays || 30)
+);
+
+
+
+
+
 // Insert Store
 
 const result = await pool.query(
@@ -46,11 +59,12 @@ password,
 plan_name,
 amount,
 subscription_status,
-razorpay_payment_id
+razorpay_payment_id,
+expiry_date
 )
 
 VALUES
-($1,$2,$3,$4,$5,$6,$7,$8,$9)
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 
 RETURNING id
 
@@ -75,13 +89,17 @@ plan.price,
 
 "ACTIVE",
 
-payment.razorpay_payment_id || payment.transaction_id
+payment.razorpay_payment_id || payment.transaction_id,
+
+expiryDate
 
 
 ]
 
 
 );
+
+
 
 
 
@@ -94,6 +112,8 @@ const storeId = result.rows[0].id;
 
 const storeCode = 
 "STORE" + String(storeId).padStart(3,"0");
+
+
 
 
 
@@ -125,6 +145,7 @@ storeId
 
 
 
+
 res.json({
 
 success:true,
@@ -133,9 +154,12 @@ storeId:storeId,
 
 storeCode:storeCode,
 
+expiryDate:expiryDate,
+
 message:"Store created successfully"
 
 });
+
 
 
 
@@ -145,7 +169,7 @@ message:"Store created successfully"
 catch(error){
 
 
-console.log(error);
+console.log("Payment Success Error:",error);
 
 
 
