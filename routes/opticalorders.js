@@ -500,6 +500,63 @@ message:"Error updating status"
 
 
 
+router.put("/orders/delete/:id", async(req,res)=>{
 
+const {id}=req.params;
+
+const adminId=req.body.user_id;
+
+
+await pool.query(
+`
+UPDATE optical_orders
+SET
+is_deleted=true,
+deleted_at=NOW(),
+deleted_by=$1
+WHERE id=$2
+`,
+[
+adminId,
+id
+]
+);
+
+
+await pool.query(
+`
+INSERT INTO delete_history
+(
+module,
+record_id,
+record_no,
+customer_name,
+deleted_by
+)
+
+SELECT
+'Orders',
+id,
+order_no,
+customer_name,
+$1
+FROM orders
+WHERE id=$2
+
+`,
+[
+adminId,
+id
+]
+);
+
+
+res.json({
+success:true,
+message:"Order moved to delete history"
+});
+
+
+});
 
 module.exports=router;
