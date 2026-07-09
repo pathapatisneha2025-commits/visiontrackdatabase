@@ -595,5 +595,204 @@ error:error.message
 
 
 });
+// =====================================
+// GET DELETE HISTORY BY STORE
+// =====================================
+
+router.get("/delete-history", async(req,res)=>{
+
+try{
+
+const {
+storeCode,
+search=""
+}=req.query;
+
+
+if(!storeCode){
+
+return res.status(400).json({
+
+success:false,
+message:"Store code required"
+
+});
+
+}
+
+
+
+const result = await pool.query(
+
+`
+SELECT *
+
+FROM delete_history
+
+WHERE store_code=$1
+
+AND
+(
+record_no ILIKE $2
+OR customer_name ILIKE $2
+OR module ILIKE $2
+)
+
+ORDER BY deleted_at DESC
+
+`,
+[
+storeCode,
+`%${search}%`
+]
+
+);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+}
+
+catch(error){
+
+console.log(error);
+
+res.status(500).json({
+
+success:false,
+
+error:error.message
+
+});
+
+}
+
+});
+// =====================================
+// RESTORE OPTICAL ORDER
+// =====================================
+
+router.put("/orders/restore/:id", async(req,res)=>{
+
+
+try{
+
+
+const {id}=req.params;
+
+
+const {
+storeCode
+}=req.body;
+
+
+
+if(!storeCode){
+
+return res.status(400).json({
+
+success:false,
+
+message:"Store code required"
+
+});
+
+}
+
+
+
+
+// Restore order
+
+await pool.query(
+
+`
+UPDATE optical_orders
+
+SET
+
+is_deleted=false,
+
+deleted_at=NULL,
+
+deleted_by=NULL
+
+WHERE id=$1
+
+AND store_code=$2
+
+`,
+[
+id,
+storeCode
+]
+
+);
+
+
+
+
+// Update history
+
+await pool.query(
+
+`
+UPDATE delete_history
+
+SET
+
+is_restored=true
+
+WHERE record_id=$1
+
+AND store_code=$2
+
+`,
+[
+id,
+storeCode
+]
+
+);
+
+
+
+res.json({
+
+success:true,
+
+message:"Order restored successfully"
+
+});
+
+
+}
+
+
+catch(error){
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+error:error.message
+
+});
+
+}
+
+
+});
 
 module.exports=router;
