@@ -9,7 +9,7 @@ const pool=require("../db");
 GET ALL ORDERS
 */
 
-router.get("/",async(req,res)=>{
+router.get("/", async(req,res)=>{
 
 try{
 
@@ -34,7 +34,7 @@ message:"Store code required"
 
 
 
-const result=await pool.query(
+const result = await pool.query(
 
 `
 SELECT *
@@ -43,12 +43,14 @@ FROM optical_orders
 
 WHERE store_code=$1
 
+AND is_deleted=false
+
 AND
 (
-order_no ILIKE $2
-OR patient_name ILIKE $2
-OR patient_id ILIKE $2
-OR mobile ILIKE $2
+    order_no ILIKE $2
+    OR patient_name ILIKE $2
+    OR patient_id ILIKE $2
+    OR mobile ILIKE $2
 )
 
 ORDER BY id DESC
@@ -85,7 +87,10 @@ console.log(error);
 res.status(500).json({
 
 success:false,
-message:"Server error"
+
+message:"Server error",
+
+error:error.message
 
 });
 
