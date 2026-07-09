@@ -533,7 +533,70 @@ message:"Failed to fetch payment history"
 
 });
 
+// =====================================
+// GET ALL PAYMENT HISTORY (SUPER ADMIN)
+// =====================================
 
+router.get("/payment-history/all", async(req,res)=>{
+
+try{
+
+
+const result = await pool.query(
+
+`
+SELECT
+
+id,
+store_code,
+invoice_no,
+transaction_id,
+payment_method,
+amount,
+plan_name,
+payment_status,
+created_at
+
+FROM subscription_payments
+
+ORDER BY created_at DESC
+
+`
+
+);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+}
+
+catch(error){
+
+
+console.log("All Payment History Error:",error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to fetch all payment history"
+
+});
+
+
+}
+
+
+});
 // ======================================
 // SIMPLE SUBSCRIPTION RENEWAL
 // ======================================
