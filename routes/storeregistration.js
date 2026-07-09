@@ -294,19 +294,41 @@ message:"Login failed"
 
 router.get("/stores", async(req,res)=>{
 
-
 try{
 
+const {storeCode}=req.query;
 
-const result = await pool.query(
 
+let result;
+
+
+if(storeCode){
+
+result = await pool.query(
+`
+SELECT *
+FROM stores
+WHERE store_code=$1
+`,
+[
+storeCode
+]
+);
+
+
+}else{
+
+
+result = await pool.query(
 `
 SELECT *
 FROM stores
 ORDER BY id DESC
 `
-
 );
+
+
+}
 
 
 
@@ -323,21 +345,17 @@ data:result.rows
 
 catch(error){
 
-
 console.log(error);
-
 
 res.status(500).json({
 
 success:false,
-
 message:"Failed to fetch stores"
 
 });
 
 
 }
-
 
 });
 
