@@ -84,7 +84,7 @@ plan.name,
 
 plan.price,
 
-"ACTIVE",
+"PENDING",
 
 payment.razorpay_payment_id || payment.transaction_id,
 
@@ -700,6 +700,171 @@ message:"Renewal failed"
 
 }
 
+
+});
+// ======================================
+// APPROVE SUBSCRIPTION
+// ======================================
+
+router.put("/approve-subscription/:id", async(req,res)=>{
+
+try{
+
+
+const {id}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+UPDATE stores
+
+SET
+subscription_status='ACTIVE',
+updated_at=NOW()
+
+WHERE id=$1
+
+RETURNING *
+
+`,
+
+[
+id
+]
+
+);
+
+
+
+if(result.rows.length===0){
+
+return res.status(404).json({
+
+success:false,
+
+message:"Store not found"
+
+});
+
+}
+
+
+
+
+res.json({
+
+success:true,
+
+message:"Subscription approved successfully",
+
+data:result.rows[0]
+
+});
+
+
+
+}
+
+catch(error){
+
+console.log("Approve Subscription Error:",error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Approval failed"
+
+});
+
+
+}
+
+});
+// ======================================
+// REJECT SUBSCRIPTION
+// ======================================
+
+router.put("/reject-subscription/:id", async(req,res)=>{
+
+try{
+
+
+const {id}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+UPDATE stores
+
+SET
+subscription_status='REJECTED',
+updated_at=NOW()
+
+WHERE id=$1
+
+RETURNING *
+
+`,
+
+[
+id
+]
+
+);
+
+
+
+if(result.rows.length===0){
+
+return res.status(404).json({
+
+success:false,
+
+message:"Store not found"
+
+});
+
+}
+
+
+
+
+res.json({
+
+success:true,
+
+message:"Subscription rejected",
+
+data:result.rows[0]
+
+});
+
+
+
+}
+
+catch(error){
+
+
+console.log("Reject Subscription Error:",error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Rejection failed"
+
+});
+
+
+}
 
 });
 module.exports = router;
