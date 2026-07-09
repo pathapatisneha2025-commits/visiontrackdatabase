@@ -48,6 +48,7 @@ AND
 order_no ILIKE $2
 OR patient_name ILIKE $2
 OR patient_id ILIKE $2
+OR mobile ILIKE $2
 )
 
 ORDER BY id DESC
@@ -97,6 +98,8 @@ message:"Server error"
 
 
 
+
+
 /*
 CREATE NEW ORDER
 */
@@ -125,6 +128,12 @@ expected_delivery,
 patient_id,
 
 patient_name,
+
+mobile,
+
+age,
+
+gender,
 
 
 frame_barcode,
@@ -172,6 +181,7 @@ Number(advance_paid || 0);
 
 
 
+
 const result=await pool.query(
 
 `
@@ -192,6 +202,12 @@ expected_delivery,
 patient_id,
 
 patient_name,
+
+mobile,
+
+age,
+
+gender,
 
 
 frame_barcode,
@@ -225,17 +241,17 @@ VALUES
 
 $1,$2,$3,$4,
 
-$5,$6,
+$5,$6,$7,$8,$9,
 
-$7,$8,
+$10,$11,
 
-$9,
+$12,
 
-$10,
+$13,
 
-$11,$12,$13,
+$14,$15,$16,
 
-$14,$15
+$17,$18
 
 )
 
@@ -260,6 +276,12 @@ expected_delivery,
 patient_id,
 
 patient_name,
+
+mobile,
+
+age || null,
+
+gender,
 
 
 frame_barcode,
@@ -291,6 +313,7 @@ payment_status || "Due"
 
 
 
+
 res.json({
 
 success:true,
@@ -316,7 +339,9 @@ res.status(500).json({
 
 success:false,
 
-message:"Error creating order"
+message:"Error creating order",
+
+error:error.message
 
 });
 
@@ -333,9 +358,11 @@ message:"Error creating order"
 
 
 
+
 /*
 GET SINGLE ORDER
 */
+
 
 router.get("/:id",async(req,res)=>{
 
@@ -377,9 +404,13 @@ order:result.rows[0]
 catch(error){
 
 
+console.log(error);
+
+
 res.status(500).json({
 
-success:false
+success:false,
+message:"Error fetching order"
 
 });
 
@@ -388,6 +419,7 @@ success:false
 
 
 });
+
 
 
 
@@ -450,9 +482,13 @@ order:result.rows[0]
 
 catch(error){
 
+console.log(error);
+
+
 res.status(500).json({
 
-success:false
+success:false,
+message:"Error updating status"
 
 });
 
@@ -460,7 +496,6 @@ success:false
 
 
 });
-
 
 
 
