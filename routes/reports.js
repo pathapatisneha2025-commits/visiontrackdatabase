@@ -3,7 +3,8 @@ const router = express.Router();
 
 const pool = require("../db");
 
-
+const PDFDocument = require("pdfkit");
+const ExcelJS = require("exceljs");
 
 /*
 ================================================
@@ -234,7 +235,543 @@ error:error.message
 
 
 
+/*
+================================================
+SALES REPORT PDF
+POST /reports/sales/pdf
+================================================
+*/
 
+
+router.post("/sales/pdf", async(req,res)=>{
+
+
+try{
+
+
+const {
+
+storeCode,
+fromDate,
+toDate,
+customer,
+lensType,
+status
+
+}=req.body;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+order_no,
+order_date,
+patient_name,
+mobile,
+lens_type,
+total_amount,
+advance_paid,
+balance_amount,
+status,
+payment_status
+
+
+FROM optical_orders
+
+
+WHERE store_code=$1
+
+
+AND
+(
+$2=''
+OR
+order_date >= TO_DATE($2,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$3=''
+OR
+order_date <= TO_DATE($3,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$4=''
+OR
+patient_name ILIKE '%'||$4||'%'
+)
+
+
+AND
+(
+$5=''
+OR
+lens_type ILIKE '%'||$5||'%'
+)
+
+
+AND
+(
+$6=''
+OR
+status ILIKE '%'||$6||'%'
+)
+
+
+ORDER BY order_date DESC
+
+
+`,
+
+[
+
+storeCode,
+fromDate || "",
+toDate || "",
+customer || "",
+lensType || "",
+status || ""
+
+]
+
+
+);
+
+
+
+
+
+res.setHeader(
+"Content-Type",
+"application/pdf"
+);
+
+
+res.setHeader(
+"Content-Disposition",
+"attachment; filename=sales-report.pdf"
+);
+
+
+
+const doc = new PDFDocument({
+margin:40
+});
+
+
+
+doc.pipe(res);
+
+
+
+doc.fontSize(20)
+.text(
+"VISION EYE CARE",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(16)
+.text(
+"Sales Report",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(10)
+.text(
+`Date Range : ${fromDate || "All"} - ${toDate || "All"}`
+);
+
+
+
+doc.moveDown();
+
+
+
+let total=0;
+
+
+
+result.rows.forEach((item,index)=>{
+
+
+doc.moveDown();
+
+
+doc.fontSize(12)
+.text(
+`${index+1}. Invoice : ${item.order_no}`
+);
+
+
+doc.fontSize(10)
+.text(
+`
+Customer : ${item.patient_name}
+
+Mobile : ${item.mobile}
+
+Lens : ${item.lens_type}
+
+Amount : ₹${item.total_amount}
+
+Advance : ₹${item.advance_paid}
+
+Balance : ₹${item.balance_amount}
+
+Status : ${item.status}
+
+Payment : ${item.payment_status}
+
+------------------------------------
+`
+);
+
+
+total += Number(item.total_amount || 0);
+
+
+});
+
+
+
+doc.moveDown();
+
+
+doc.fontSize(14)
+.text(
+`Total Sales : ₹${total}`
+);
+
+
+
+doc.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"PDF generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+
+});
+/*
+================================================
+SALES REPORT EXCEL
+POST /reports/sales/excel
+================================================
+*/
+
+
+router.post("/sales/excel", async(req,res)=>{
+
+
+try{
+
+
+const {
+
+storeCode,
+fromDate,
+toDate,
+customer,
+lensType,
+status
+
+}=req.body;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+order_no,
+
+order_date,
+
+patient_name,
+
+mobile,
+
+lens_type,
+
+total_amount,
+
+advance_paid,
+
+balance_amount,
+
+status,
+
+payment_status
+
+
+FROM optical_orders
+
+
+WHERE store_code=$1
+
+
+AND
+(
+$2=''
+OR
+order_date >= TO_DATE($2,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$3=''
+OR
+order_date <= TO_DATE($3,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$4=''
+OR
+patient_name ILIKE '%'||$4||'%'
+)
+
+
+AND
+(
+$5=''
+OR
+lens_type ILIKE '%'||$5||'%'
+)
+
+
+AND
+(
+$6=''
+OR
+status ILIKE '%'||$6||'%'
+)
+
+
+ORDER BY order_date DESC
+
+
+`,
+
+[
+
+storeCode,
+fromDate || "",
+toDate || "",
+customer || "",
+lensType || "",
+status || ""
+
+]
+
+
+);
+
+
+
+
+
+const workbook = new ExcelJS.Workbook();
+
+
+const sheet =
+workbook.addWorksheet(
+"Sales Report"
+);
+
+
+
+sheet.columns=[
+
+
+{
+header:"Invoice",
+key:"order_no",
+width:20
+},
+
+
+{
+header:"Date",
+key:"order_date",
+width:15
+},
+
+
+{
+header:"Customer",
+key:"patient_name",
+width:25
+},
+
+
+{
+header:"Mobile",
+key:"mobile",
+width:15
+},
+
+
+{
+header:"Lens Type",
+key:"lens_type",
+width:20
+},
+
+
+{
+header:"Amount",
+key:"total_amount",
+width:15
+},
+
+
+{
+header:"Advance",
+key:"advance_paid",
+width:15
+},
+
+
+{
+header:"Balance",
+key:"balance_amount",
+width:15
+},
+
+
+{
+header:"Status",
+key:"status",
+width:15
+},
+
+
+{
+header:"Payment",
+key:"payment_status",
+width:15
+}
+
+
+];
+
+
+
+
+result.rows.forEach(row=>{
+
+
+sheet.addRow(row);
+
+
+});
+
+
+
+
+res.setHeader(
+
+"Content-Type",
+
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+);
+
+
+
+res.setHeader(
+
+"Content-Disposition",
+
+"attachment; filename=sales-report.xlsx"
+
+);
+
+
+
+
+await workbook.xlsx.write(res);
+
+
+res.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Excel generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+
+});
 
 
 
