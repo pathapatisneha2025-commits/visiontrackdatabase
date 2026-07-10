@@ -1708,6 +1708,269 @@ error:error.message
 });
 /*
 ================================================
+MONTHLY SALES REPORT EXCEL
+GET /reports/monthly/:storeCode/excel
+================================================
+*/
+
+router.get("/monthly/:storeCode/excel", async(req,res)=>{
+
+try{
+
+
+const {
+storeCode
+}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+TO_CHAR(
+order_date,
+'Mon YYYY'
+)
+AS month,
+
+
+COUNT(*) AS total_orders,
+
+
+COALESCE(
+SUM(total_amount),
+0
+)
+AS total_sales,
+
+
+COALESCE(
+SUM(advance_paid),
+0
+)
+AS received,
+
+
+COALESCE(
+SUM(balance_amount),
+0
+)
+AS pending
+
+
+
+FROM optical_orders
+
+
+
+WHERE store_code=$1
+
+
+
+GROUP BY
+
+
+TO_CHAR(
+order_date,
+'Mon YYYY'
+),
+
+
+DATE_TRUNC(
+'month',
+order_date
+)
+
+
+
+ORDER BY
+
+
+DATE_TRUNC(
+'month',
+order_date
+)
+DESC
+
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+const workbook = new ExcelJS.Workbook();
+
+
+const sheet =
+workbook.addWorksheet(
+"Monthly Sales"
+);
+
+
+
+
+
+sheet.columns=[
+
+{
+header:"Month",
+key:"month",
+width:20
+},
+
+{
+header:"Total Orders",
+key:"total_orders",
+width:15
+},
+
+{
+header:"Total Sales",
+key:"total_sales",
+width:18
+},
+
+{
+header:"Received",
+key:"received",
+width:18
+},
+
+{
+header:"Pending",
+key:"pending",
+width:18
+}
+
+];
+
+
+
+
+
+let grandTotal=0;
+
+let totalOrders=0;
+
+
+
+result.rows.forEach(row=>{
+
+
+sheet.addRow({
+
+month:row.month,
+
+total_orders:row.total_orders,
+
+total_sales:Number(row.total_sales),
+
+received:Number(row.received),
+
+pending:Number(row.pending)
+
+});
+
+
+grandTotal += Number(row.total_sales || 0);
+
+totalOrders += Number(row.total_orders || 0);
+
+
+});
+
+
+
+
+
+// SUMMARY ROW
+
+sheet.addRow({});
+
+sheet.addRow({
+
+month:"TOTAL",
+
+total_orders:totalOrders,
+
+total_sales:grandTotal
+
+
+});
+
+
+
+
+
+res.setHeader(
+
+"Content-Type",
+
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+);
+
+
+
+res.setHeader(
+
+"Content-Disposition",
+
+"attachment; filename=monthly-sales-report.xlsx"
+
+);
+
+
+
+
+
+await workbook.xlsx.write(res);
+
+
+res.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"MONTHLY EXCEL ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Monthly Excel generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
+/*
+================================================
 EYE EXAMINATION REPORT
 POST /reports/eye-exam
 ================================================
