@@ -1412,7 +1412,300 @@ message:"Monthly report error"
 });
 
 
+/*
+================================================
+MONTHLY SALES REPORT PDF
+GET /reports/monthly/:storeCode/pdf
+================================================
+*/
 
+router.get("/monthly/:storeCode/pdf", async(req,res)=>{
+
+try{
+
+
+const {
+storeCode
+}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+TO_CHAR(
+order_date,
+'Mon YYYY'
+)
+AS month,
+
+
+COUNT(*) AS total_orders,
+
+
+COALESCE(
+SUM(total_amount),
+0
+)
+AS total_sales,
+
+
+COALESCE(
+SUM(advance_paid),
+0
+)
+AS received,
+
+
+COALESCE(
+SUM(balance_amount),
+0
+)
+AS pending
+
+
+
+FROM optical_orders
+
+
+
+WHERE store_code=$1
+
+
+
+GROUP BY
+
+
+TO_CHAR(
+order_date,
+'Mon YYYY'
+),
+
+
+DATE_TRUNC(
+'month',
+order_date
+)
+
+
+
+ORDER BY
+
+
+DATE_TRUNC(
+'month',
+order_date
+)
+DESC
+
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+res.setHeader(
+"Content-Type",
+"application/pdf"
+);
+
+
+res.setHeader(
+"Content-Disposition",
+"attachment; filename=monthly-sales-report.pdf"
+);
+
+
+
+
+const doc = new PDFDocument({
+margin:40
+});
+
+
+
+doc.pipe(res);
+
+
+
+
+// HEADER
+
+doc.fontSize(20)
+.font("Helvetica-Bold")
+.text(
+"VISION EYE CARE",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(16)
+.text(
+"Monthly Sales Report",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown(2);
+
+
+
+doc.fontSize(11)
+.text(
+`Store Code : ${storeCode}`
+);
+
+
+
+doc.moveDown();
+
+
+
+
+
+let grandTotal=0;
+
+let totalOrders=0;
+
+
+
+
+
+result.rows.forEach((item,index)=>{
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(12)
+.font("Helvetica-Bold")
+.text(
+`${index+1}. ${item.month}`
+);
+
+
+
+doc.fontSize(10)
+.font("Helvetica")
+.text(
+
+`
+Total Orders : ${item.total_orders}
+
+Total Sales  : ₹${item.total_sales}
+
+Received     : ₹${item.received}
+
+Pending      : ₹${item.pending}
+
+-------------------------------------
+`
+
+);
+
+
+
+grandTotal += Number(
+item.total_sales || 0
+);
+
+
+totalOrders += Number(
+item.total_orders || 0
+);
+
+
+
+});
+
+
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(14)
+.font("Helvetica-Bold")
+.text(
+"Summary"
+);
+
+
+
+doc.fontSize(11)
+.font("Helvetica")
+.text(
+
+`
+
+Total Orders : ${totalOrders}
+
+Total Sales  : ₹${grandTotal}
+
+`
+
+);
+
+
+
+
+doc.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"MONTHLY PDF ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Monthly PDF generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+
+});
 /*
 ================================================
 EYE EXAMINATION REPORT
