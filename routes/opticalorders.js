@@ -359,7 +359,6 @@ error:error.message
 
 
 
-
 router.get("/delete-history", async(req,res)=>{
 
 try{
@@ -391,6 +390,8 @@ SELECT *
 FROM delete_history
 
 WHERE store_code=$1
+
+AND is_restored=false
 
 AND
 (
