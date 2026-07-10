@@ -7,6 +7,7 @@ const OpticalOrders = require("./routes/opticalorders.js");
 const StockInventory = require("./routes/stockinventory.js");
 const FollowUps = require("./routes/followups.js");
 const SubscriptionPlans = require("./routes/subscriptionplans.js");
+const Reports = require("./routes/reports.js");
 
 
 
@@ -27,6 +28,7 @@ app.use("/opticalorders",OpticalOrders );
 app.use("/stockinventory",StockInventory );
 app.use("/followups",FollowUps );
 app.use("/subscriptionplans",SubscriptionPlans );
+app.use("/reports",Reports);
 
 
 
