@@ -1024,7 +1024,569 @@ message:"Customer report error"
 
 
 
+/*
+================================================
+CUSTOMER REPORT PDF
+POST /reports/customer/pdf
+================================================
+*/
 
+router.post("/customer/pdf", async(req,res)=>{
+
+try{
+
+
+const {
+
+storeCode,
+
+customer
+
+}=req.body;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+patient_name,
+
+
+mobile,
+
+
+COUNT(*) AS total_orders,
+
+
+COALESCE(
+SUM(total_amount),
+0
+) AS total_purchase,
+
+
+COALESCE(
+SUM(balance_amount),
+0
+) AS pending_amount
+
+
+
+FROM optical_orders
+
+
+
+WHERE store_code=$1
+
+
+
+AND
+
+(
+
+$2=''
+
+OR
+
+patient_name ILIKE '%'||$2||'%'
+
+)
+
+
+
+GROUP BY
+
+patient_name,
+
+mobile
+
+
+
+ORDER BY total_purchase DESC
+
+
+
+`,
+
+[
+
+storeCode,
+
+customer || ""
+
+]
+
+
+);
+
+
+
+
+
+res.setHeader(
+"Content-Type",
+"application/pdf"
+);
+
+
+res.setHeader(
+"Content-Disposition",
+"attachment; filename=customer-report.pdf"
+);
+
+
+
+
+const doc = new PDFDocument({
+margin:40
+});
+
+
+doc.pipe(res);
+
+
+
+
+
+doc.fontSize(20)
+.font("Helvetica-Bold")
+.text(
+"VISION EYE CARE",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(16)
+.text(
+"Customer Report",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown(2);
+
+
+
+doc.fontSize(11)
+.text(
+`Store Code : ${storeCode}`
+);
+
+
+
+doc.moveDown();
+
+
+
+let totalPurchase=0;
+
+let pendingTotal=0;
+
+
+
+
+
+result.rows.forEach((item,index)=>{
+
+
+doc.moveDown();
+
+
+doc.fontSize(12)
+.font("Helvetica-Bold")
+.text(
+`${index+1}. ${item.patient_name}`
+);
+
+
+
+doc.fontSize(10)
+.font("Helvetica")
+.text(
+
+`
+
+Mobile : ${item.mobile}
+
+Total Orders : ${item.total_orders}
+
+Total Purchase : ₹${item.total_purchase}
+
+Pending Amount : ₹${item.pending_amount}
+
+------------------------------------
+
+`
+
+);
+
+
+
+totalPurchase += Number(
+item.total_purchase || 0
+);
+
+
+pendingTotal += Number(
+item.pending_amount || 0
+);
+
+
+});
+
+
+
+
+
+doc.moveDown();
+
+
+doc.fontSize(14)
+.font("Helvetica-Bold")
+.text(
+"Summary"
+);
+
+
+
+doc.fontSize(11)
+.font("Helvetica")
+.text(
+
+`
+
+Total Purchase : ₹${totalPurchase}
+
+Total Pending : ₹${pendingTotal}
+
+`
+
+);
+
+
+
+
+doc.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"CUSTOMER PDF ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Customer PDF generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
+
+/*
+================================================
+CUSTOMER REPORT EXCEL
+POST /reports/customer/excel
+================================================
+*/
+
+router.post("/customer/excel", async(req,res)=>{
+
+try{
+
+
+const {
+
+storeCode,
+
+customer
+
+}=req.body;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+patient_name,
+
+
+mobile,
+
+
+COUNT(*) AS total_orders,
+
+
+COALESCE(
+SUM(total_amount),
+0
+) AS total_purchase,
+
+
+COALESCE(
+SUM(balance_amount),
+0
+) AS pending_amount
+
+
+
+FROM optical_orders
+
+
+
+WHERE store_code=$1
+
+
+
+AND
+
+(
+
+$2=''
+
+OR
+
+patient_name ILIKE '%'||$2||'%'
+
+)
+
+
+
+GROUP BY
+
+patient_name,
+
+mobile
+
+
+
+ORDER BY total_purchase DESC
+
+
+
+`,
+
+[
+
+storeCode,
+
+customer || ""
+
+]
+
+
+);
+
+
+
+
+
+const workbook = new ExcelJS.Workbook();
+
+
+
+const sheet =
+workbook.addWorksheet(
+"Customer Report"
+);
+
+
+
+
+
+sheet.columns=[
+
+
+{
+header:"Customer Name",
+key:"patient_name",
+width:25
+},
+
+
+{
+header:"Mobile",
+key:"mobile",
+width:15
+},
+
+
+{
+header:"Total Orders",
+key:"total_orders",
+width:15
+},
+
+
+{
+header:"Total Purchase",
+key:"total_purchase",
+width:18
+},
+
+
+{
+header:"Pending Amount",
+key:"pending_amount",
+width:18
+}
+
+
+
+];
+
+
+
+
+
+let totalPurchase=0;
+
+let totalPending=0;
+
+
+
+result.rows.forEach(row=>{
+
+
+sheet.addRow({
+
+patient_name:row.patient_name,
+
+mobile:row.mobile,
+
+total_orders:row.total_orders,
+
+total_purchase:Number(row.total_purchase),
+
+pending_amount:Number(row.pending_amount)
+
+});
+
+
+
+totalPurchase += Number(
+row.total_purchase || 0
+);
+
+
+totalPending += Number(
+row.pending_amount || 0
+);
+
+
+});
+
+
+
+
+
+sheet.addRow({});
+
+
+sheet.addRow({
+
+patient_name:"TOTAL",
+
+total_purchase:totalPurchase,
+
+pending_amount:totalPending
+
+});
+
+
+
+
+
+res.setHeader(
+
+"Content-Type",
+
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+);
+
+
+
+res.setHeader(
+
+"Content-Disposition",
+
+"attachment; filename=customer-report.xlsx"
+
+);
+
+
+
+
+
+await workbook.xlsx.write(res);
+
+
+res.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"CUSTOMER EXCEL ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Customer Excel generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
 
 
 /*
@@ -1151,9 +1713,563 @@ message:"Pending orders error"
 
 
 
+/*
+================================================
+PENDING ORDERS PDF
+GET /reports/pending/:storeCode/pdf
+================================================
+*/
+
+router.get("/pending/:storeCode/pdf", async(req,res)=>{
+
+try{
+
+
+const {
+storeCode
+}=req.params;
 
 
 
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+order_no,
+
+order_date,
+
+patient_name,
+
+mobile,
+
+lens_type,
+
+total_amount,
+
+advance_paid,
+
+balance_amount,
+
+expected_delivery,
+
+status,
+
+payment_status
+
+
+
+FROM optical_orders
+
+
+
+WHERE store_code=$1
+
+
+
+AND status='Pending'
+
+
+
+ORDER BY order_date DESC
+
+
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+res.setHeader(
+"Content-Type",
+"application/pdf"
+);
+
+
+
+res.setHeader(
+"Content-Disposition",
+"attachment; filename=pending-orders.pdf"
+);
+
+
+
+
+
+const doc = new PDFDocument({
+margin:40
+});
+
+
+
+doc.pipe(res);
+
+
+
+
+
+doc.fontSize(20)
+.font("Helvetica-Bold")
+.text(
+"VISION EYE CARE",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(16)
+.text(
+"Pending Orders Report",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown(2);
+
+
+
+doc.fontSize(11)
+.text(
+`Store Code : ${storeCode}`
+);
+
+
+
+doc.moveDown();
+
+
+
+let totalAmount=0;
+
+let totalPending=0;
+
+
+
+
+result.rows.forEach((item,index)=>{
+
+
+doc.moveDown();
+
+
+doc.fontSize(12)
+.font("Helvetica-Bold")
+.text(
+
+`${index+1}. Order No : ${item.order_no}`
+
+);
+
+
+
+doc.fontSize(10)
+.font("Helvetica")
+.text(
+
+`
+
+Customer : ${item.patient_name}
+
+Mobile : ${item.mobile}
+
+Lens Type : ${item.lens_type}
+
+Amount : ₹${item.total_amount}
+
+Advance : ₹${item.advance_paid}
+
+Balance : ₹${item.balance_amount}
+
+Expected Delivery : ${item.expected_delivery}
+
+Payment Status : ${item.payment_status}
+
+-------------------------------------
+
+`
+
+);
+
+
+
+totalAmount += Number(
+item.total_amount || 0
+);
+
+
+totalPending += Number(
+item.balance_amount || 0
+);
+
+
+
+});
+
+
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(14)
+.font("Helvetica-Bold")
+.text(
+"Summary"
+);
+
+
+
+doc.fontSize(11)
+.font("Helvetica")
+.text(
+
+`
+
+Total Pending Orders : ${result.rows.length}
+
+Total Amount : ₹${totalAmount}
+
+Total Pending Balance : ₹${totalPending}
+
+`
+
+);
+
+
+
+
+
+doc.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"PENDING PDF ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Pending PDF generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
+
+/*
+================================================
+PENDING ORDERS EXCEL
+GET /reports/pending/:storeCode/excel
+================================================
+*/
+
+router.get("/pending/:storeCode/excel", async(req,res)=>{
+
+try{
+
+
+const {
+storeCode
+}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+order_no,
+
+order_date,
+
+patient_name,
+
+mobile,
+
+lens_type,
+
+total_amount,
+
+advance_paid,
+
+balance_amount,
+
+expected_delivery,
+
+status,
+
+payment_status
+
+
+
+FROM optical_orders
+
+
+
+WHERE store_code=$1
+
+
+
+AND status='Pending'
+
+
+
+ORDER BY order_date DESC
+
+
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+const workbook = new ExcelJS.Workbook();
+
+
+
+const sheet =
+workbook.addWorksheet(
+"Pending Orders"
+);
+
+
+
+
+
+sheet.columns=[
+
+
+{
+header:"Order No",
+key:"order_no",
+width:20
+},
+
+
+{
+header:"Order Date",
+key:"order_date",
+width:15
+},
+
+
+{
+header:"Customer",
+key:"patient_name",
+width:25
+},
+
+
+{
+header:"Mobile",
+key:"mobile",
+width:15
+},
+
+
+{
+header:"Lens Type",
+key:"lens_type",
+width:20
+},
+
+
+{
+header:"Amount",
+key:"total_amount",
+width:15
+},
+
+
+{
+header:"Advance",
+key:"advance_paid",
+width:15
+},
+
+
+{
+header:"Balance",
+key:"balance_amount",
+width:15
+},
+
+
+{
+header:"Expected Delivery",
+key:"expected_delivery",
+width:20
+},
+
+
+{
+header:"Status",
+key:"status",
+width:15
+},
+
+
+{
+header:"Payment Status",
+key:"payment_status",
+width:18
+}
+
+
+];
+
+
+
+
+
+let totalAmount=0;
+
+let totalBalance=0;
+
+
+
+result.rows.forEach(row=>{
+
+
+sheet.addRow(row);
+
+
+
+totalAmount += Number(
+row.total_amount || 0
+);
+
+
+totalBalance += Number(
+row.balance_amount || 0
+);
+
+
+});
+
+
+
+
+
+sheet.addRow({});
+
+
+sheet.addRow({
+
+order_no:"TOTAL",
+
+total_amount:totalAmount,
+
+balance_amount:totalBalance
+
+});
+
+
+
+
+
+res.setHeader(
+
+"Content-Type",
+
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+);
+
+
+
+res.setHeader(
+
+"Content-Disposition",
+
+"attachment; filename=pending-orders.xlsx"
+
+);
+
+
+
+
+
+await workbook.xlsx.write(res);
+
+
+res.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"PENDING EXCEL ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Pending Excel generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
 
 /*
 ================================================
@@ -1265,9 +2381,521 @@ message:"Stock report error"
 
 
 
+/*
+================================================
+STOCK REPORT PDF
+GET /reports/stock/:storeCode/pdf
+================================================
+*/
+
+router.get("/stock/:storeCode/pdf", async(req,res)=>{
+
+try{
+
+
+const {
+storeCode
+}=req.params;
 
 
 
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+barcode,
+
+brand,
+
+frame_name,
+
+model,
+
+color,
+
+size,
+
+purchase_price,
+
+selling_price,
+
+supplier,
+
+quantity,
+
+rack_location
+
+
+
+FROM optical_stock
+
+
+
+WHERE store_code=$1
+
+
+
+ORDER BY id DESC
+
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+res.setHeader(
+"Content-Type",
+"application/pdf"
+);
+
+
+res.setHeader(
+"Content-Disposition",
+"attachment; filename=stock-report.pdf"
+);
+
+
+
+
+
+const doc = new PDFDocument({
+margin:40
+});
+
+
+
+doc.pipe(res);
+
+
+
+
+
+doc.fontSize(20)
+.font("Helvetica-Bold")
+.text(
+"VISION EYE CARE",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(16)
+.text(
+"Stock Report",
+{
+align:"center"
+}
+);
+
+
+
+doc.moveDown(2);
+
+
+
+doc.fontSize(11)
+.text(
+`Store Code : ${storeCode}`
+);
+
+
+
+doc.moveDown();
+
+
+
+let totalQuantity=0;
+
+
+
+result.rows.forEach((item,index)=>{
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(12)
+.font("Helvetica-Bold")
+.text(
+
+`${index+1}. ${item.brand || ""} ${item.frame_name || ""}`
+
+);
+
+
+
+doc.fontSize(10)
+.font("Helvetica")
+.text(
+
+`
+
+Barcode : ${item.barcode}
+
+Model : ${item.model}
+
+Color : ${item.color}
+
+Size : ${item.size}
+
+Purchase Price : ₹${item.purchase_price}
+
+Selling Price : ₹${item.selling_price}
+
+Supplier : ${item.supplier}
+
+Quantity : ${item.quantity}
+
+Rack : ${item.rack_location}
+
+-------------------------------------
+
+`
+
+);
+
+
+
+totalQuantity += Number(
+item.quantity || 0
+);
+
+
+
+});
+
+
+
+
+
+doc.moveDown();
+
+
+
+doc.fontSize(14)
+.font("Helvetica-Bold")
+.text(
+
+`Total Stock Quantity : ${totalQuantity}`
+
+);
+
+
+
+
+
+doc.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"STOCK PDF ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Stock PDF generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
+
+/*
+================================================
+STOCK REPORT EXCEL
+GET /reports/stock/:storeCode/excel
+================================================
+*/
+
+router.get("/stock/:storeCode/excel", async(req,res)=>{
+
+try{
+
+
+const {
+storeCode
+}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+barcode,
+
+brand,
+
+frame_name,
+
+model,
+
+color,
+
+size,
+
+purchase_price,
+
+selling_price,
+
+supplier,
+
+quantity,
+
+rack_location
+
+
+
+FROM optical_stock
+
+
+
+WHERE store_code=$1
+
+
+
+ORDER BY id DESC
+
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+const workbook = new ExcelJS.Workbook();
+
+
+
+const sheet =
+workbook.addWorksheet(
+"Stock Report"
+);
+
+
+
+
+
+sheet.columns=[
+
+
+{
+header:"Barcode",
+key:"barcode",
+width:20
+},
+
+
+{
+header:"Brand",
+key:"brand",
+width:20
+},
+
+
+{
+header:"Frame Name",
+key:"frame_name",
+width:25
+},
+
+
+{
+header:"Model",
+key:"model",
+width:20
+},
+
+
+{
+header:"Color",
+key:"color",
+width:15
+},
+
+
+{
+header:"Size",
+key:"size",
+width:12
+},
+
+
+{
+header:"Purchase Price",
+key:"purchase_price",
+width:18
+},
+
+
+{
+header:"Selling Price",
+key:"selling_price",
+width:18
+},
+
+
+{
+header:"Supplier",
+key:"supplier",
+width:20
+},
+
+
+{
+header:"Quantity",
+key:"quantity",
+width:15
+},
+
+
+{
+header:"Rack Location",
+key:"rack_location",
+width:18
+}
+
+
+];
+
+
+
+
+
+let totalQuantity=0;
+
+
+
+result.rows.forEach(row=>{
+
+
+sheet.addRow(row);
+
+
+totalQuantity += Number(
+row.quantity || 0
+);
+
+
+});
+
+
+
+
+
+sheet.addRow({});
+
+
+sheet.addRow({
+
+barcode:"TOTAL",
+
+quantity:totalQuantity
+
+});
+
+
+
+
+
+res.setHeader(
+
+"Content-Type",
+
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+);
+
+
+
+res.setHeader(
+
+"Content-Disposition",
+
+"attachment; filename=stock-report.xlsx"
+
+);
+
+
+
+
+
+await workbook.xlsx.write(res);
+
+
+res.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(
+"STOCK EXCEL ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Stock Excel generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
 
 
 
@@ -2151,6 +3779,517 @@ res.status(500).json({
 success:false,
 
 message:"Eye examination report error",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
+/*
+================================================
+EYE EXAM REPORT PDF
+POST /reports/eye-exam/pdf
+================================================
+*/
+
+router.post("/eye-exam/pdf", async(req,res)=>{
+
+try{
+
+
+const {
+
+storeCode,
+fromDate,
+toDate,
+customer
+
+}=req.body;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+patient_id,
+
+patient_name,
+
+right_sph,
+
+right_cyl,
+
+right_axis,
+
+left_sph,
+
+left_cyl,
+
+left_axis,
+
+add_power,
+
+pd,
+
+notes,
+
+exam_date
+
+
+FROM eye_exams
+
+
+WHERE store_code=$1
+
+
+AND
+(
+$2=''
+OR
+exam_date >= TO_DATE($2,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$3=''
+OR
+exam_date <= TO_DATE($3,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$4=''
+OR
+patient_name ILIKE '%'||$4||'%'
+)
+
+
+ORDER BY exam_date DESC
+
+
+`,
+
+[
+
+storeCode,
+fromDate || "",
+toDate || "",
+customer || ""
+
+]
+
+
+);
+
+
+
+res.setHeader(
+"Content-Type",
+"application/pdf"
+);
+
+
+res.setHeader(
+"Content-Disposition",
+"attachment; filename=eye-exam-report.pdf"
+);
+
+
+
+const doc = new PDFDocument({
+margin:40
+});
+
+
+doc.pipe(res);
+
+
+
+doc.fontSize(20)
+.text(
+"VISION EYE CARE",
+{
+align:"center"
+}
+);
+
+
+doc.moveDown();
+
+
+doc.fontSize(16)
+.text(
+"Eye Examination Report",
+{
+align:"center"
+}
+);
+
+
+doc.moveDown();
+
+
+doc.fontSize(10)
+.text(
+`Date Range : ${fromDate || "All"} - ${toDate || "All"}`
+);
+
+
+
+doc.moveDown();
+
+
+
+result.rows.forEach((item,index)=>{
+
+
+doc.fontSize(12)
+.text(
+`${index+1}. Patient : ${item.patient_name}`
+);
+
+
+
+doc.fontSize(10)
+.text(
+
+`
+Patient ID : ${item.patient_id || ""}
+
+Exam Date : ${item.exam_date}
+
+Right Eye
+SPH : ${item.right_sph}
+CYL : ${item.right_cyl}
+AXIS : ${item.right_axis}
+
+
+Left Eye
+SPH : ${item.left_sph}
+CYL : ${item.left_cyl}
+AXIS : ${item.left_axis}
+
+
+Add Power : ${item.add_power}
+
+PD : ${item.pd}
+
+Notes : ${item.notes}
+
+
+----------------------------------------
+`
+
+);
+
+
+});
+
+
+
+doc.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Eye exam PDF generation failed",
+
+error:error.message
+
+});
+
+
+}
+
+
+});
+
+
+
+
+
+
+
+/*
+================================================
+EYE EXAM REPORT EXCEL
+POST /reports/eye-exam/excel
+================================================
+*/
+
+
+router.post("/eye-exam/excel", async(req,res)=>{
+
+
+try{
+
+
+const {
+
+storeCode,
+fromDate,
+toDate,
+customer
+
+}=req.body;
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+patient_id,
+
+patient_name,
+
+right_sph,
+
+right_cyl,
+
+right_axis,
+
+left_sph,
+
+left_cyl,
+
+left_axis,
+
+add_power,
+
+pd,
+
+notes,
+
+exam_date
+
+
+FROM eye_exams
+
+
+WHERE store_code=$1
+
+
+AND
+(
+$2=''
+OR
+exam_date >= TO_DATE($2,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$3=''
+OR
+exam_date <= TO_DATE($3,'DD-MM-YYYY')
+)
+
+
+AND
+(
+$4=''
+OR
+patient_name ILIKE '%'||$4||'%'
+)
+
+
+ORDER BY exam_date DESC
+
+
+`,
+
+[
+
+storeCode,
+fromDate || "",
+toDate || "",
+customer || ""
+
+]
+
+
+);
+
+
+
+
+
+const workbook = new ExcelJS.Workbook();
+
+
+const sheet = workbook.addWorksheet(
+"Eye Examination"
+);
+
+
+
+sheet.columns=[
+
+
+{
+header:"Patient ID",
+key:"patient_id",
+width:15
+},
+
+
+{
+header:"Patient Name",
+key:"patient_name",
+width:25
+},
+
+
+{
+header:"Right SPH",
+key:"right_sph",
+width:12
+},
+
+
+{
+header:"Right CYL",
+key:"right_cyl",
+width:12
+},
+
+
+{
+header:"Right AXIS",
+key:"right_axis",
+width:12
+},
+
+
+{
+header:"Left SPH",
+key:"left_sph",
+width:12
+},
+
+
+{
+header:"Left CYL",
+key:"left_cyl",
+width:12
+},
+
+
+{
+header:"Left AXIS",
+key:"left_axis",
+width:12
+},
+
+
+{
+header:"Add Power",
+key:"add_power",
+width:15
+},
+
+
+{
+header:"PD",
+key:"pd",
+width:10
+},
+
+
+{
+header:"Notes",
+key:"notes",
+width:30
+},
+
+
+{
+header:"Exam Date",
+key:"exam_date",
+width:15
+}
+
+
+];
+
+
+
+
+result.rows.forEach(row=>{
+
+sheet.addRow(row);
+
+});
+
+
+
+
+res.setHeader(
+
+"Content-Type",
+
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+);
+
+
+
+res.setHeader(
+
+"Content-Disposition",
+
+"attachment; filename=eye-exam-report.xlsx"
+
+);
+
+
+
+await workbook.xlsx.write(res);
+
+
+res.end();
+
+
+
+}
+
+
+catch(error){
+
+
+console.log(error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Eye exam Excel generation failed",
 
 error:error.message
 
