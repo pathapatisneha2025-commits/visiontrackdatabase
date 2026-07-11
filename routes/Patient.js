@@ -318,14 +318,11 @@ router.delete("/delete/:id", async(req,res)=>{
 
 try{
 
-
 const patientId=req.params.id;
-
 
 const {
 storeCode
 }=req.body;
-
 
 
 if(!storeCode){
@@ -340,7 +337,6 @@ message:"Store code required"
 }
 
 
-
 // get patient before delete
 
 const patientResult = await pool.query(
@@ -350,6 +346,7 @@ SELECT *
 FROM patients
 WHERE id=$1
 AND store_code=$2
+AND is_deleted=false
 `,
 [
 patientId,
@@ -357,7 +354,6 @@ storeCode
 ]
 
 );
-
 
 
 if(patientResult.rows.length===0){
@@ -377,12 +373,15 @@ const patient=patientResult.rows[0];
 
 
 
-// delete patient
+// SOFT DELETE PATIENT
 
 await pool.query(
 
 `
-DELETE FROM patients
+UPDATE patients
+
+SET is_deleted=true
+
 WHERE id=$1
 AND store_code=$2
 
@@ -393,7 +392,6 @@ storeCode
 ]
 
 );
-
 
 
 
@@ -425,7 +423,7 @@ $1,$2,$3,$4,$5,$6
 
 patient.id,
 
-patient.patient_no || `PT${patient.id}`,
+patient.patient_id,   // changed here
 
 patient.name,
 
@@ -439,16 +437,13 @@ storeCode
 
 
 
-
-
 res.json({
 
 success:true,
 
-message:"Patient deleted successfully"
+message:"Patient moved to recycle bin"
 
 });
-
 
 
 }
@@ -465,11 +460,9 @@ error:error.message
 
 });
 
-
 }
 
 
 });
-
 
 module.exports=router;
