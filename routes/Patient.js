@@ -474,6 +474,10 @@ query
 }=req.query;
 
 
+console.log("STORE:",storeCode);
+console.log("QUERY:",query);
+
+
 if(!storeCode || !query){
 
 return res.json({
@@ -489,10 +493,12 @@ const search = `%${query}%`;
 
 // ================= PATIENT SEARCH =================
 
+console.log("START PATIENT SEARCH");
+
+
 const patients = await pool.query(
 `
 SELECT
-
 p.id,
 p.patient_id,
 p.name,
@@ -506,17 +512,12 @@ FROM patients p
 WHERE p.store_code=$1
 
 AND (
-
 LOWER(p.name) LIKE LOWER($2)
-
 OR p.mobile LIKE $2
-
 OR p.patient_id LIKE $2
-
 )
 
 ORDER BY p.id DESC
-
 `,
 [
 storeCode,
@@ -525,15 +526,20 @@ search
 );
 
 
+console.log("PATIENT SEARCH SUCCESS");
+
+
 
 
 // ================= ORDER SEARCH =================
 
-const orders = await pool.query(
 
+console.log("START ORDER SEARCH");
+
+
+const orders = await pool.query(
 `
 SELECT
-
 o.id,
 o.order_no,
 o.patient_id,
@@ -545,137 +551,109 @@ o.order_date
 
 FROM optical_orders o
 
-
 WHERE o.store_code=$1
 
-
 AND (
-
 LOWER(o.order_no) LIKE LOWER($2)
-
 OR LOWER(o.patient_name) LIKE LOWER($2)
-
 OR o.mobile LIKE $2
-
 OR o.patient_id LIKE $2
-
 )
 
-
 ORDER BY o.id DESC
-
 `,
 [
 storeCode,
 search
 ]
-
 );
+
+
+console.log("ORDER SEARCH SUCCESS");
 
 
 
 
 // ================= EYE EXAM SEARCH =================
 
-const exams = await pool.query(
 
+console.log("START EYE SEARCH");
+
+
+const exams = await pool.query(
 `
 SELECT
-
 e.id,
-
 e.patient_id,
-
 e.patient_name,
-
 e.right_sph,
 e.right_cyl,
 e.right_axis,
-
 e.left_sph,
 e.left_cyl,
 e.left_axis,
-
 e.exam_date
-
 
 FROM eye_exams e
 
-
 WHERE e.store_code=$1
 
-
 AND (
-
 LOWER(e.patient_name) LIKE LOWER($2)
-
 OR e.patient_id LIKE $2
-
 )
 
-
 ORDER BY e.id DESC
-
 `,
 [
 storeCode,
 search
 ]
-
 );
+
+
+console.log("EYE SEARCH SUCCESS");
 
 
 
 
 // ================= FOLLOWUP SEARCH =================
 
-const followups = await pool.query(
 
+console.log("START FOLLOWUP SEARCH");
+
+
+const followups = await pool.query(
 `
 SELECT
-
 f.id,
-
 f.patient_id,
-
 f.patient_name,
-
 f.followup_date,
-
 f.notes,
-
 f.status
-
 
 FROM followups f
 
-
 WHERE f.store_code=$1
 
-
 AND (
-
 LOWER(f.patient_name) LIKE LOWER($2)
-
 OR f.patient_id LIKE $2
-
 )
 
-
 ORDER BY f.id DESC
-
 `,
 [
 storeCode,
 search
 ]
-
 );
 
 
+console.log("FOLLOWUP SEARCH SUCCESS");
 
 
-// ================= RESPONSE =================
 
 return res.json({
 
@@ -695,12 +673,8 @@ followups:followups.rows
 }
 catch(error){
 
-
-console.log(
-"GLOBAL SEARCH ERROR:",
-error.message
-);
-
+console.log("GLOBAL SEARCH ERROR FULL:");
+console.log(error);
 
 res.status(500).json({
 
@@ -709,7 +683,6 @@ success:false,
 message:error.message
 
 });
-
 
 }
 
