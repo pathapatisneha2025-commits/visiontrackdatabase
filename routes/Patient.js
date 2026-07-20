@@ -484,20 +484,23 @@ message:"Missing search data"
 }
 
 
+
 const search = `%${query}%`;
 
 
-// ONLY PATIENT SEARCH
+// Patient Details
 
 const patients = await pool.query(
 
 `
+
 SELECT
 
 id,
 patient_id,
 name,
 mobile,
+email,
 address
 
 FROM patients
@@ -524,29 +527,183 @@ search
 
 
 
+
+// Eye Exams
+
+const exams = await pool.query(
+
+`
+
+SELECT
+
+id,
+patient_id,
+patient_name,
+exam_date,
+
+right_sph,
+right_cyl,
+right_axis,
+
+left_sph,
+left_cyl,
+left_axis,
+
+notes
+
+FROM eye_exams
+
+WHERE store_code=$1
+
+AND
+(
+patient_name ILIKE $2
+OR patient_id ILIKE $2
+)
+
+ORDER BY exam_date DESC
+
+LIMIT 10
+
+
+`,
+
+[
+storeCode,
+search
+]
+
+);
+
+
+
+
+
+// Follow Ups
+
+const followups = await pool.query(
+
+`
+
+SELECT
+
+id,
+patient_id,
+patient_name,
+mobile,
+followup_date,
+reason
+
+FROM followups
+
+WHERE store_code=$1
+
+AND
+(
+patient_name ILIKE $2
+OR patient_id ILIKE $2
+OR mobile ILIKE $2
+)
+
+
+ORDER BY followup_date DESC
+
+LIMIT 10
+
+
+`,
+
+[
+storeCode,
+search
+]
+
+);
+
+
+
+
+
+// Orders
+
+const orders = await pool.query(
+
+`
+
+SELECT
+
+id,
+order_number,
+patient_name,
+mobile,
+total_amount,
+order_date
+
+
+FROM optical_orders
+
+
+WHERE store_code=$1
+
+AND
+(
+order_number ILIKE $2
+OR patient_name ILIKE $2
+OR mobile ILIKE $2
+)
+
+
+ORDER BY order_date DESC
+
+LIMIT 10
+
+
+`,
+
+[
+storeCode,
+search
+]
+
+);
+
+
+
+
+
 res.json({
 
 success:true,
 
-patients:patients.rows
+patients:patients.rows,
+
+eyeExams:exams.rows,
+
+followups:followups.rows,
+
+orders:orders.rows
+
 
 });
+
 
 
 }
 
 catch(error){
 
-console.log("GLOBAL SEARCH ERROR:",error.stack);
+console.log(error);
 
 res.status(500).json({
 
 success:false,
-message:error.message
+message:"Search failed"
 
 });
 
+
 }
+
 
 });
 module.exports=router;
