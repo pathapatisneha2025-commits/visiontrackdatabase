@@ -129,28 +129,19 @@ CREATE PATIENT
 
 router.post("/add",async(req,res)=>{
 
-
 try{
 
 
 const {
 
-
 storeCode,
-
 name,
-
 mobile,
-
 age,
-
 gender,
-
 address
 
-
 }=req.body;
-
 
 
 
@@ -159,7 +150,6 @@ if(!storeCode){
 return res.status(400).json({
 
 success:false,
-
 message:"Store code missing"
 
 });
@@ -167,9 +157,26 @@ message:"Store code missing"
 }
 
 
+// Generate PT001, PT002...
+
+const countResult = await pool.query(
+`
+SELECT COUNT(*) 
+FROM patients
+WHERE store_code=$1
+`,
+[
+storeCode
+]
+);
+
+
+const nextNumber =
+Number(countResult.rows[0].count)+1;
+
 
 const patientId =
-"PT"+Date.now();
+"PT"+String(nextNumber).padStart(3,"0");
 
 
 
@@ -199,17 +206,11 @@ RETURNING *
 [
 
 patientId,
-
 storeCode,
-
 name,
-
 mobile,
-
 age,
-
 gender,
-
 address
 
 ]
@@ -247,7 +248,6 @@ message:"Error creating patient"
 
 
 }
-
 
 
 });
