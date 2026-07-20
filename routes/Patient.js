@@ -487,12 +487,11 @@ message:"Missing search data"
 const search = `%${query}%`;
 
 
-// Patients
+// ONLY PATIENT SEARCH
 
 const patients = await pool.query(
 
 `
-
 SELECT
 
 id,
@@ -525,147 +524,11 @@ search
 
 
 
-// Eye Exams
-
-const exams = await pool.query(
-
-`
-
-SELECT
-
-id,
-patient_id,
-patient_name,
-exam_date,
-
-right_sph,
-right_cyl,
-right_axis,
-
-left_sph,
-left_cyl,
-left_axis,
-
-notes
-
-FROM eye_exams
-
-WHERE store_code=$1
-
-AND
-(
-patient_name ILIKE $2
-OR patient_id ILIKE $2
-)
-
-ORDER BY exam_date DESC
-
-LIMIT 10
-
-`,
-
-[
-storeCode,
-search
-]
-
-);
-
-
-
-// Followups
-
-const followups = await pool.query(
-
-`
-
-SELECT
-
-id,
-patient_id,
-patient_name,
-mobile,
-followup_date,
-reason
-
-FROM followups
-
-WHERE store_code=$1
-
-AND
-(
-patient_name ILIKE $2
-OR patient_id ILIKE $2
-OR mobile ILIKE $2
-)
-
-ORDER BY followup_date DESC
-
-LIMIT 10
-
-`,
-
-[
-storeCode,
-search
-]
-
-);
-
-
-
-// Orders
-
-const orders = await pool.query(
-
-`
-
-SELECT
-
-id,
-order_no,
-patient_name,
-mobile,
-total_amount,
-order_date
-
-FROM optical_orders
-
-WHERE store_code=$1
-
-AND
-(
-order_no ILIKE $2
-OR patient_name ILIKE $2
-OR mobile ILIKE $2
-)
-
-ORDER BY order_date DESC
-
-LIMIT 10
-
-`,
-
-[
-storeCode,
-search
-]
-
-);
-
-
-
 res.json({
 
 success:true,
 
-patients:patients.rows,
-
-eyeExams:exams.rows,
-
-followups:followups.rows,
-
-orders:orders.rows
+patients:patients.rows
 
 });
 
@@ -674,7 +537,7 @@ orders:orders.rows
 
 catch(error){
 
-console.log("GLOBAL SEARCH ERROR:",error);
+console.log("GLOBAL SEARCH ERROR:",error.stack);
 
 res.status(500).json({
 
