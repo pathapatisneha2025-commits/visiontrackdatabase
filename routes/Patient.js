@@ -484,11 +484,10 @@ message:"Missing search data"
 }
 
 
-
 const search = `%${query}%`;
 
 
-// Patient Details
+// Patients
 
 const patients = await pool.query(
 
@@ -500,7 +499,6 @@ id,
 patient_id,
 name,
 mobile,
-email,
 address
 
 FROM patients
@@ -524,7 +522,6 @@ search
 ]
 
 );
-
 
 
 
@@ -565,7 +562,6 @@ ORDER BY exam_date DESC
 
 LIMIT 10
 
-
 `,
 
 [
@@ -577,9 +573,7 @@ search
 
 
 
-
-
-// Follow Ups
+// Followups
 
 const followups = await pool.query(
 
@@ -605,11 +599,9 @@ OR patient_id ILIKE $2
 OR mobile ILIKE $2
 )
 
-
 ORDER BY followup_date DESC
 
 LIMIT 10
-
 
 `,
 
@@ -619,8 +611,6 @@ search
 ]
 
 );
-
-
 
 
 
@@ -641,7 +631,6 @@ order_date
 
 FROM optical_orders
 
-
 WHERE store_code=$1
 
 AND
@@ -652,8 +641,8 @@ OR mobile ILIKE $2
 )
 
 ORDER BY order_date DESC
-LIMIT 10
 
+LIMIT 10
 
 `,
 
@@ -663,8 +652,6 @@ search
 ]
 
 );
-
-
 
 
 
@@ -680,27 +667,23 @@ followups:followups.rows,
 
 orders:orders.rows
 
-
 });
-
 
 
 }
 
 catch(error){
 
-console.log("GLOBAL SEARCH ERROR:", error.message);
+console.log("GLOBAL SEARCH ERROR:",error);
 
 res.status(500).json({
 
 success:false,
-message:"Search failed"
+message:error.message
 
 });
 
-
 }
-
 
 });
 module.exports=router;
