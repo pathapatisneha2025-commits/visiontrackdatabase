@@ -444,27 +444,37 @@ router.get("/store-details/:storeCode", async(req,res)=>{
 
 try{
 
+
 const {storeCode}=req.params;
+
 
 
 const result = await pool.query(
 
 `
 SELECT
+
 id,
 store_name,
-store_code
+store_code,
+owner_name,
+mobile,
+email,
+subscription_status
 
 FROM stores
 
 WHERE store_code=$1
-AND subscription_status='ACTIVE'
+
 `,
+
 [
 storeCode
 ]
 
 );
+
+
 
 
 
@@ -482,6 +492,8 @@ message:"Store not found"
 
 
 
+
+
 res.json({
 
 success:true,
@@ -491,10 +503,16 @@ data:result.rows[0]
 });
 
 
+
 }
 catch(error){
 
-console.log("Store Details Error:",error);
+
+console.log(
+"Store Details Error:",
+error
+);
+
 
 
 res.status(500).json({
