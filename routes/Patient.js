@@ -478,188 +478,93 @@ if(!storeCode || !query){
 
 return res.json({
 success:false,
-message:"Missing search data"
+message:"Store code and search required"
 });
 
 }
-
 
 
 const search = `%${query}%`;
 
 
-// Patient Details
+// ================= PATIENT SEARCH =================
 
 const patients = await pool.query(
-
 `
-
 SELECT
 
-id,
-patient_id,
-name,
-mobile,
-email,
-address
+p.id,
+p.patient_id,
+p.name,
+p.mobile,
+p.address,
+p.age,
+p.gender
 
-FROM patients
+FROM patients p
 
-WHERE store_code=$1
+WHERE p.store_code=$1
 
-AND
-(
-name ILIKE $2
-OR mobile ILIKE $2
-OR patient_id ILIKE $2
+AND (
+
+LOWER(p.name) LIKE LOWER($2)
+
+OR p.mobile LIKE $2
+
+OR p.patient_id LIKE $2
+
 )
 
-LIMIT 10
+ORDER BY p.id DESC
 
 `,
-
 [
 storeCode,
 search
 ]
-
 );
 
 
 
 
-// Eye Exams
-
-const exams = await pool.query(
-
-`
-
-SELECT
-
-id,
-patient_id,
-patient_name,
-exam_date,
-
-right_sph,
-right_cyl,
-right_axis,
-
-left_sph,
-left_cyl,
-left_axis,
-
-notes
-
-FROM eye_exams
-
-WHERE store_code=$1
-
-AND
-(
-patient_name ILIKE $2
-OR patient_id ILIKE $2
-)
-
-ORDER BY exam_date DESC
-
-LIMIT 10
-
-
-`,
-
-[
-storeCode,
-search
-]
-
-);
-
-
-
-
-
-// Follow Ups
-
-const followups = await pool.query(
-
-`
-
-SELECT
-
-id,
-patient_id,
-patient_name,
-mobile,
-followup_date,
-reason
-
-FROM followups
-
-WHERE store_code=$1
-
-AND
-(
-patient_name ILIKE $2
-OR patient_id ILIKE $2
-OR mobile ILIKE $2
-)
-
-
-ORDER BY followup_date DESC
-
-LIMIT 10
-
-
-`,
-
-[
-storeCode,
-search
-]
-
-);
-
-
-
-
-
-// Orders
+// ================= ORDER SEARCH =================
 
 const orders = await pool.query(
 
 `
-
 SELECT
 
-id,
-order_number,
-patient_name,
-mobile,
-total_amount,
-order_date
+o.id,
+o.order_no,
+o.patient_id,
+o.patient_name,
+o.mobile,
+o.total_amount,
+o.status,
+o.order_date
+
+FROM optical_orders o
 
 
-FROM optical_orders
+WHERE o.store_code=$1
 
 
-WHERE store_code=$1
+AND (
 
-AND
-(
-order_number ILIKE $2
-OR patient_name ILIKE $2
-OR mobile ILIKE $2
+LOWER(o.order_no) LIKE LOWER($2)
+
+OR LOWER(o.patient_name) LIKE LOWER($2)
+
+OR o.mobile LIKE $2
+
+OR o.patient_id LIKE $2
+
 )
 
 
-ORDER BY order_date DESC
-
-LIMIT 10
-
+ORDER BY o.id DESC
 
 `,
-
 [
 storeCode,
 search
@@ -670,40 +575,143 @@ search
 
 
 
+// ================= EYE EXAM SEARCH =================
 
-res.json({
+const exams = await pool.query(
+
+`
+SELECT
+
+e.id,
+
+e.patient_id,
+
+e.patient_name,
+
+e.right_sph,
+e.right_cyl,
+e.right_axis,
+
+e.left_sph,
+e.left_cyl,
+e.left_axis,
+
+e.exam_date
+
+
+FROM eye_exams e
+
+
+WHERE e.store_code=$1
+
+
+AND (
+
+LOWER(e.patient_name) LIKE LOWER($2)
+
+OR e.patient_id LIKE $2
+
+)
+
+
+ORDER BY e.id DESC
+
+`,
+[
+storeCode,
+search
+]
+
+);
+
+
+
+
+// ================= FOLLOWUP SEARCH =================
+
+const followups = await pool.query(
+
+`
+SELECT
+
+f.id,
+
+f.patient_id,
+
+f.patient_name,
+
+f.followup_date,
+
+f.notes,
+
+f.status
+
+
+FROM followups f
+
+
+WHERE f.store_code=$1
+
+
+AND (
+
+LOWER(f.patient_name) LIKE LOWER($2)
+
+OR f.patient_id LIKE $2
+
+)
+
+
+ORDER BY f.id DESC
+
+`,
+[
+storeCode,
+search
+]
+
+);
+
+
+
+
+// ================= RESPONSE =================
+
+return res.json({
 
 success:true,
 
 patients:patients.rows,
 
+orders:orders.rows,
+
 eyeExams:exams.rows,
 
-followups:followups.rows,
-
-orders:orders.rows
-
+followups:followups.rows
 
 });
 
 
-
 }
-
 catch(error){
 
-console.log(error);
+
+console.log(
+"GLOBAL SEARCH ERROR:",
+error.message
+);
+
 
 res.status(500).json({
 
 success:false,
-message:"Search failed"
+
+message:error.message
 
 });
 
 
 }
-
 
 });
 module.exports=router;
