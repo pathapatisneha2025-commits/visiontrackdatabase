@@ -436,6 +436,80 @@ message:"Failed to fetch stores"
 }
 
 });
+// ======================================
+// GET STORE NAME AND CODE
+// ======================================
+
+router.get("/store-details/:storeCode", async(req,res)=>{
+
+try{
+
+const {storeCode}=req.params;
+
+
+const result = await pool.query(
+
+`
+SELECT
+id,
+store_name,
+store_code
+
+FROM stores
+
+WHERE store_code=$1
+AND subscription_status='ACTIVE'
+`,
+[
+storeCode
+]
+
+);
+
+
+
+if(result.rows.length===0){
+
+return res.status(404).json({
+
+success:false,
+
+message:"Store not found"
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows[0]
+
+});
+
+
+}
+catch(error){
+
+console.log("Store Details Error:",error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to fetch store details"
+
+});
+
+
+}
+
+
+});
 
 
 // ======================================
