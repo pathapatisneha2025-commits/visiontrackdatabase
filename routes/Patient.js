@@ -689,7 +689,7 @@ orders:orders.rows
 
 catch(error){
 
-console.log(error);
+console.log("GLOBAL SEARCH ERROR:", error.message);
 
 res.status(500).json({
 
