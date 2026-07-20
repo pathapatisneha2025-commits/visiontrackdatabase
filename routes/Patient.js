@@ -176,17 +176,11 @@ const followups = await pool.query(
 SELECT
 
 f.id,
-
 f.patient_id,
-
 f.patient_name,
-
 f.followup_date,
-
-f.notes,
-
+f.reason,
 f.status
-
 
 FROM followups f
 
