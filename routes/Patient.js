@@ -633,12 +633,11 @@ const orders = await pool.query(
 SELECT
 
 id,
-order_number,
+order_no,
 patient_name,
 mobile,
 total_amount,
 order_date
-
 
 FROM optical_orders
 
@@ -647,14 +646,12 @@ WHERE store_code=$1
 
 AND
 (
-order_number ILIKE $2
+order_no ILIKE $2
 OR patient_name ILIKE $2
 OR mobile ILIKE $2
 )
 
-
 ORDER BY order_date DESC
-
 LIMIT 10
 
 
