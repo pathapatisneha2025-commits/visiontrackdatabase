@@ -8,7 +8,7 @@ const pool=require("../db");
 
 // ADD CATEGORY
 
-router.post("/",async(req,res)=>{
+router.post("/add",async(req,res)=>{
 
 
 try{
@@ -65,7 +65,7 @@ message:error.message
 // GET ALL
 
 
-router.get("/",async(req,res)=>{
+router.get("/all",async(req,res)=>{
 
 
 const result=await pool.query(

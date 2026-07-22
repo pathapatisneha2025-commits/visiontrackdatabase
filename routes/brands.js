@@ -9,7 +9,7 @@ const pool=require("../db");
 // ADD BRAND
 
 
-router.post("/",async(req,res)=>{
+router.post("/add",async(req,res)=>{
 
 
 const {
@@ -62,7 +62,7 @@ data:result.rows[0]
 // GET BRANDS
 
 
-router.get("/",async(req,res)=>{
+router.get("/all",async(req,res)=>{
 
 
 const result=await pool.query(
