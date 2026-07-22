@@ -8,7 +8,10 @@ const StockInventory = require("./routes/stockinventory.js");
 const FollowUps = require("./routes/followups.js");
 const SubscriptionPlans = require("./routes/subscriptionplans.js");
 const Reports = require("./routes/reports.js");
+const Categories = require("./routes/categories.js");
+const Brands = require("./routes/brands.js");
 
+const Products = require("./routes/products.js");
 
 
 
@@ -29,6 +32,9 @@ app.use("/stockinventory",StockInventory );
 app.use("/followups",FollowUps );
 app.use("/subscriptionplans",SubscriptionPlans );
 app.use("/reports",Reports);
+app.use("/categories",Categories);
+app.use("/brands",Brands);
+app.use("/products",Products );
 
 
 
