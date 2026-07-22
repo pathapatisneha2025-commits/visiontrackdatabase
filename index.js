@@ -10,6 +10,7 @@ const SubscriptionPlans = require("./routes/subscriptionplans.js");
 const Reports = require("./routes/reports.js");
 const Categories = require("./routes/categories.js");
 const Brands = require("./routes/brands.js");
+const Cart = require("./routes/cart.js");
 
 const Products = require("./routes/products.js");
 
@@ -35,6 +36,7 @@ app.use("/reports",Reports);
 app.use("/categories",Categories);
 app.use("/brands",Brands);
 app.use("/products",Products );
+app.use("/cart",Cart );
 
 
 
