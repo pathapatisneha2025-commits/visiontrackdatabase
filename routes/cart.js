@@ -18,18 +18,26 @@ try{
 
 
 const {
-customer_id,
+
+store_code,
+
 product_id,
+
 product_name,
+
 brand,
+
 category,
+
 image,
+
 price
+
 }=req.body;
 
 
 
-// CHECK EXISTING PRODUCT
+
 
 const check = await pool.query(
 
@@ -38,17 +46,18 @@ SELECT *
 
 FROM vcart_items
 
-WHERE customer_id=$1
+WHERE store_code=$1
 
 AND product_id=$2
 
 `,
 [
-customer_id,
+store_code,
 product_id
 ]
 
 );
+
 
 
 
@@ -57,9 +66,6 @@ product_id
 if(check.rows.length > 0){
 
 
-
-// INCREASE QUANTITY
-
 await pool.query(
 
 `
@@ -67,18 +73,17 @@ UPDATE vcart_items
 
 SET quantity = quantity + 1
 
-WHERE customer_id=$1
+WHERE store_code=$1
 
 AND product_id=$2
 
 `,
 [
-customer_id,
+store_code,
 product_id
 ]
 
 );
-
 
 
 }
@@ -86,15 +91,12 @@ product_id
 else{
 
 
-
-// INSERT NEW PRODUCT
-
 await pool.query(
 
 `
 INSERT INTO vcart_items
 (
-customer_id,
+store_code,
 product_id,
 product_name,
 brand,
@@ -109,7 +111,7 @@ VALUES
 
 `,
 [
-customer_id,
+store_code,
 product_id,
 product_name,
 brand,
@@ -121,8 +123,8 @@ price
 );
 
 
-
 }
+
 
 
 
@@ -131,10 +133,9 @@ res.json({
 
 success:true,
 
-message:"Product added to cart"
+message:"Added to cart"
 
 });
-
 
 
 }
@@ -149,9 +150,7 @@ error
 
 res.status(500).json({
 
-success:false,
-
-message:"Server error"
+success:false
 
 });
 
@@ -168,13 +167,12 @@ message:"Server error"
 
 
 
-
 // ===============================
-// GET CUSTOMER CART
+// GET CART BY STORE
 // ===============================
 
 
-router.get("/:customer_id",async(req,res)=>{
+router.get("/:store_code",async(req,res)=>{
 
 
 try{
@@ -187,17 +185,16 @@ SELECT *
 
 FROM vcart_items
 
-WHERE customer_id=$1
+WHERE store_code=$1
 
 ORDER BY id DESC
 
 `,
 [
-req.params.customer_id
+req.params.store_code
 ]
 
 );
-
 
 
 
@@ -210,7 +207,6 @@ data:result.rows
 });
 
 
-
 }
 catch(error){
 
@@ -219,7 +215,6 @@ console.log(
 "GET CART ERROR",
 error
 );
-
 
 
 res.status(500).json({
@@ -242,12 +237,13 @@ success:false
 
 
 
+
 // ===============================
-// CART COUNT
+// CART COUNT BY STORE
 // ===============================
 
 
-router.get("/count/:customer_id",async(req,res)=>{
+router.get("/count/:store_code",async(req,res)=>{
 
 
 try{
@@ -260,15 +256,14 @@ SELECT COALESCE(SUM(quantity),0) AS count
 
 FROM vcart_items
 
-WHERE customer_id=$1
+WHERE store_code=$1
 
 `,
 [
-req.params.customer_id
+req.params.store_code
 ]
 
 );
-
 
 
 
@@ -283,7 +278,6 @@ result.rows[0].count
 });
 
 
-
 }
 catch(error){
 
@@ -292,7 +286,6 @@ console.log(
 "CART COUNT ERROR",
 error
 );
-
 
 
 res.status(500).json({
@@ -388,7 +381,7 @@ success:false
 
 
 // ===============================
-// REMOVE CART ITEM
+// REMOVE ITEM
 // ===============================
 
 
@@ -418,7 +411,7 @@ res.json({
 
 success:true,
 
-message:"Removed from cart"
+message:"Removed"
 
 });
 
@@ -441,7 +434,6 @@ success:false
 
 
 });
-
 
 
 
