@@ -118,7 +118,6 @@ VALUES
 
 ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 
-
 `
 
 ,
@@ -147,12 +146,14 @@ item.brand,
 
 item.image,
 
+
 Number(item.price),
 
 Number(item.quantity),
 
 
 Number(totalAmount),
+
 
 paymentMethod,
 
@@ -173,7 +174,32 @@ paymentMethod,
 
 
 
+// Commit order
+
 await client.query("COMMIT");
+
+
+
+
+// ================================
+// CLEAR CART AFTER ORDER SUCCESS
+// ================================
+
+
+await pool.query(
+
+`
+
+DELETE FROM cart
+
+WHERE store_code=$1
+
+`,
+
+[storeCode]
+
+
+);
 
 
 
@@ -229,7 +255,6 @@ client.release();
 
 
 });
-
 
 
 
