@@ -63,10 +63,22 @@ await client.query("BEGIN");
 
 
 // Generate Order Number
+// Generate Order Number
+
+const orderCount = await client.query(
+`
+SELECT COUNT(DISTINCT order_id) AS count
+FROM vorder
+`
+);
+
+
+const nextOrderNumber =
+Number(orderCount.rows[0].count) + 1;
+
 
 const orderId =
-"ORD" + Date.now();
-
+"ORD" + String(nextOrderNumber).padStart(3,"0");
 
 
 
