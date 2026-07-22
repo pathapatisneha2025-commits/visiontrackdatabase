@@ -13,6 +13,7 @@ const Brands = require("./routes/brands.js");
 const Cart = require("./routes/cart.js");
 
 const Products = require("./routes/products.js");
+const PlaceOrders = require("./routes/orders.js");
 
 
 
@@ -37,6 +38,7 @@ app.use("/categories",Categories);
 app.use("/brands",Brands);
 app.use("/products",Products );
 app.use("/cart",Cart );
+app.use("/orders",PlaceOrders );
 
 
 

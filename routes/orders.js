@@ -1,0 +1,361 @@
+const express = require("express");
+
+const router = express.Router();
+
+const pool = require("../db");
+
+
+
+// PLACE ORDER
+
+router.post("/place", async(req,res)=>{
+
+
+const client = await pool.connect();
+
+
+try{
+
+
+const {
+
+storeCode,
+
+customer,
+
+items,
+
+totalAmount
+
+
+}=req.body;
+
+
+
+if(
+!storeCode ||
+!customer ||
+!items ||
+items.length===0
+){
+
+return res.json({
+
+success:false,
+
+message:"Invalid order data"
+
+});
+
+}
+
+
+
+await client.query("BEGIN");
+
+
+
+// Generate Order Number
+
+const orderId =
+"ORD" + Date.now();
+
+
+
+
+
+for(const item of items){
+
+
+
+await client.query(
+
+`
+
+INSERT INTO vorder
+
+(
+
+order_id,
+
+store_code,
+
+
+customer_name,
+
+mobile,
+
+address,
+
+
+product_id,
+
+product_name,
+
+brand,
+
+image,
+
+price,
+
+quantity,
+
+
+total_amount
+
+
+)
+
+VALUES
+
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+
+`
+
+,
+
+[
+
+orderId,
+
+storeCode,
+
+
+customer.customerName,
+
+customer.mobile,
+
+customer.address,
+
+
+item.product_id || item.id,
+
+item.product_name,
+
+item.brand,
+
+item.image,
+
+item.price,
+
+item.quantity,
+
+
+totalAmount
+
+
+]
+
+
+);
+
+
+
+}
+
+// GET ORDERS BY STORE CODE
+
+router.get("/:storeCode", async(req,res)=>{
+
+
+try{
+
+
+const {storeCode}=req.params;
+
+
+
+if(!storeCode){
+
+return res.json({
+
+success:false,
+
+message:"Store code required"
+
+});
+
+}
+
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+order_id,
+
+store_code,
+
+customer_name,
+
+mobile,
+
+address,
+
+total_amount,
+
+status,
+
+created_at,
+
+
+json_agg(
+
+json_build_object(
+
+'id',id,
+
+'product_id',product_id,
+
+'product_name',product_name,
+
+'brand',brand,
+
+'image',image,
+
+'price',price,
+
+'quantity',quantity
+
+)
+
+) AS items
+
+
+
+FROM vorder
+
+
+WHERE store_code=$1
+
+
+GROUP BY
+
+order_id,
+
+store_code,
+
+customer_name,
+
+mobile,
+
+address,
+
+total_amount,
+
+status,
+
+created_at
+
+
+ORDER BY created_at DESC
+
+
+`,
+
+[storeCode]
+
+);
+
+
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+
+}
+catch(error){
+
+
+console.log(
+"GET ORDERS ERROR",
+error
+);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Server error"
+
+});
+
+
+}
+
+
+
+});
+
+
+await client.query("COMMIT");
+
+
+
+
+
+res.json({
+
+success:true,
+
+message:"Order placed successfully",
+
+orderId
+
+});
+
+
+
+}
+
+catch(error){
+
+
+await client.query("ROLLBACK");
+
+
+console.log(
+"ORDER ERROR",
+error
+);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Server error"
+
+});
+
+
+}
+
+finally{
+
+
+client.release();
+
+
+}
+
+
+
+});
+
+
+
+module.exports = router;
