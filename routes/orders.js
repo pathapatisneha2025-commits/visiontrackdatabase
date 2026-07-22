@@ -6,9 +6,11 @@ const pool = require("../db");
 
 
 
+// ===============================
 // PLACE ORDER
+// ===============================
 
-router.post("/place", async(req,res)=>{
+router.post("/place", async (req,res)=>{
 
 
 const client = await pool.connect();
@@ -25,7 +27,9 @@ customer,
 
 items,
 
-totalAmount
+totalAmount,
+
+paymentMethod
 
 
 }=req.body;
@@ -36,8 +40,10 @@ if(
 !storeCode ||
 !customer ||
 !items ||
-items.length===0
+items.length===0 ||
+!paymentMethod
 ){
+
 
 return res.json({
 
@@ -46,6 +52,7 @@ success:false,
 message:"Invalid order data"
 
 });
+
 
 }
 
@@ -80,13 +87,11 @@ order_id,
 
 store_code,
 
-
 customer_name,
 
 mobile,
 
 address,
-
 
 product_id,
 
@@ -100,21 +105,27 @@ price,
 
 quantity,
 
+total_amount,
 
-total_amount
+payment_method,
 
+status
 
 )
 
+
 VALUES
 
-($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+
 
 `
 
 ,
 
+
 [
+
 
 orderId,
 
@@ -136,12 +147,17 @@ item.brand,
 
 item.image,
 
-item.price,
+Number(item.price),
 
-item.quantity,
+Number(item.quantity),
 
 
-totalAmount
+Number(totalAmount),
+
+paymentMethod,
+
+
+"Pending"
 
 
 ]
@@ -153,152 +169,8 @@ totalAmount
 
 }
 
-// GET ORDERS BY STORE CODE
 
-router.get("/:storeCode", async(req,res)=>{
 
-
-try{
-
-
-const {storeCode}=req.params;
-
-
-
-if(!storeCode){
-
-return res.json({
-
-success:false,
-
-message:"Store code required"
-
-});
-
-}
-
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-order_id,
-
-store_code,
-
-customer_name,
-
-mobile,
-
-address,
-
-total_amount,
-
-status,
-
-created_at,
-
-
-json_agg(
-
-json_build_object(
-
-'id',id,
-
-'product_id',product_id,
-
-'product_name',product_name,
-
-'brand',brand,
-
-'image',image,
-
-'price',price,
-
-'quantity',quantity
-
-)
-
-) AS items
-
-
-
-FROM vorder
-
-
-WHERE store_code=$1
-
-
-GROUP BY
-
-order_id,
-
-store_code,
-
-customer_name,
-
-mobile,
-
-address,
-
-total_amount,
-
-status,
-
-created_at
-
-
-ORDER BY created_at DESC
-
-
-`,
-
-[storeCode]
-
-);
-
-
-
-
-
-res.json({
-
-success:true,
-
-data:result.rows
-
-});
-
-
-
-}
-catch(error){
-
-
-console.log(
-"GET ORDERS ERROR",
-error
-);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Server error"
-
-});
-
-
-}
-
-
-
-});
 
 
 await client.query("COMMIT");
@@ -315,6 +187,7 @@ message:"Order placed successfully",
 
 orderId
 
+
 });
 
 
@@ -328,9 +201,10 @@ await client.query("ROLLBACK");
 
 
 console.log(
-"ORDER ERROR",
+"PLACE ORDER ERROR",
 error
 );
+
 
 
 res.status(500).json({
@@ -355,6 +229,214 @@ client.release();
 
 
 });
+
+
+
+
+
+
+
+
+// ===============================
+// GET ORDERS BY STORE CODE
+// ===============================
+
+
+router.get("/:storeCode", async(req,res)=>{
+
+
+try{
+
+
+const {
+storeCode
+}=req.params;
+
+
+
+if(!storeCode){
+
+
+return res.json({
+
+success:false,
+
+message:"Store code required"
+
+});
+
+
+}
+
+
+
+
+
+const result = await pool.query(
+
+`
+
+SELECT
+
+
+order_id,
+
+store_code,
+
+
+customer_name,
+
+mobile,
+
+address,
+
+
+total_amount,
+
+payment_method,
+
+status,
+
+created_at,
+
+
+
+json_agg(
+
+
+json_build_object(
+
+
+'id',
+id,
+
+
+'product_id',
+product_id,
+
+
+'product_name',
+product_name,
+
+
+'brand',
+brand,
+
+
+'image',
+image,
+
+
+'price',
+price,
+
+
+'quantity',
+quantity
+
+
+)
+
+
+) AS items
+
+
+
+FROM vorder
+
+
+
+WHERE store_code=$1
+
+
+
+
+GROUP BY
+
+
+order_id,
+
+store_code,
+
+customer_name,
+
+mobile,
+
+address,
+
+total_amount,
+
+payment_method,
+
+status,
+
+created_at
+
+
+
+
+ORDER BY created_at DESC
+
+
+
+`
+
+
+,
+
+
+[storeCode]
+
+
+);
+
+
+
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+
+});
+
+
+
+}
+
+catch(error){
+
+
+console.log(
+
+"GET ORDERS ERROR",
+
+error
+
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Server error"
+
+});
+
+
+}
+
+
+
+});
+
+
 
 
 
