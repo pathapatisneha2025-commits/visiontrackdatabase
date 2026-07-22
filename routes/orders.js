@@ -190,7 +190,7 @@ await pool.query(
 
 `
 
-DELETE FROM cart
+DELETE FROM vcart_items
 
 WHERE store_code=$1
 
