@@ -757,23 +757,22 @@ message:"Server error"
 // GET REVIEWS BY PRODUCT
 // ===============================
 
-
-router.get("/:productId", async(req,res)=>{
-
+router.get("/reviews/:productId", async(req,res)=>{
 
 try{
 
-
-const {
-productId
-}=req.params;
-
+const {productId}=req.params;
 
 
 const result = await pool.query(
-
 `
-SELECT *
+SELECT 
+id,
+product_id,
+customer_name,
+rating,
+review,
+created_at
 
 FROM product_reviews
 
@@ -782,10 +781,7 @@ WHERE product_id=$1
 ORDER BY created_at DESC
 
 `,
-[
-productId
-]
-
+[productId]
 );
 
 
@@ -799,26 +795,21 @@ data:result.rows
 });
 
 
-
 }
 catch(error){
 
-
-console.log(
-"GET REVIEW ERROR",
-error
-);
+console.log("GET REVIEWS ERROR",error);
 
 
 res.status(500).json({
 
-success:false
+success:false,
+message:"Failed to fetch reviews"
 
 });
 
 
 }
-
 
 
 });
