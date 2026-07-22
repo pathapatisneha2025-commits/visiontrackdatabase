@@ -648,5 +648,182 @@ success:false
 
 );
 
+router.post("/addreview", async(req,res)=>{
+
+
+try{
+
+
+const {
+product_id,
+customer_name,
+rating,
+review
+}=req.body;
+
+
+
+if(
+!product_id ||
+!customer_name ||
+!rating ||
+!review
+){
+
+return res.json({
+
+success:false,
+
+message:"All fields required"
+
+});
+
+}
+
+
+
+
+const result = await pool.query(
+
+`
+INSERT INTO product_reviews
+(
+product_id,
+customer_name,
+rating,
+review
+)
+
+VALUES($1,$2,$3,$4)
+
+RETURNING *
+
+`,
+[
+product_id,
+customer_name,
+rating,
+review
+]
+
+
+);
+
+
+
+res.json({
+
+success:true,
+
+message:"Review added successfully",
+
+data:result.rows[0]
+
+});
+
+
+
+}
+catch(error){
+
+
+console.log(
+"ADD REVIEW ERROR",
+error
+);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Server error"
+
+});
+
+
+}
+
+
+});
+
+
+
+
+
+
+
+// ===============================
+// GET REVIEWS BY PRODUCT
+// ===============================
+
+
+router.get("/:productId", async(req,res)=>{
+
+
+try{
+
+
+const {
+productId
+}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+SELECT *
+
+FROM product_reviews
+
+WHERE product_id=$1
+
+ORDER BY created_at DESC
+
+`,
+[
+productId
+]
+
+);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+
+}
+catch(error){
+
+
+console.log(
+"GET REVIEW ERROR",
+error
+);
+
+
+res.status(500).json({
+
+success:false
+
+});
+
+
+}
+
+
+
+});
+
+
+
 
 module.exports=router;
