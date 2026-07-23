@@ -473,7 +473,89 @@ message:"Server error"
 
 });
 
+// =====================================
+// SUPER ADMIN - GET ALL SHOP ORDERS
+// =====================================
 
+router.get("/admin/all", async(req,res)=>{
+
+try{
+
+
+const result = await pool.query(`
+
+SELECT
+
+order_id,
+
+store_code,
+
+customer_name,
+
+mobile,
+
+SUM(quantity) AS total_products,
+
+total_amount,
+
+status,
+
+created_at
+
+
+FROM vorder
+
+
+GROUP BY
+
+order_id,
+store_code,
+customer_name,
+mobile,
+total_amount,
+status,
+created_at
+
+
+ORDER BY created_at DESC
+
+
+`);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+}
+
+catch(error){
+
+console.log(
+"ADMIN ALL ORDERS ERROR",
+error
+);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Server error"
+
+});
+
+
+}
+
+
+});
 
 
 
