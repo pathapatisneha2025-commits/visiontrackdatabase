@@ -556,6 +556,85 @@ message:"Server error"
 
 
 });
+router.get("/admin/summary",async(req,res)=>{
+
+
+try{
+
+
+const result =
+await pool.query(`
+
+
+SELECT
+
+
+COUNT(DISTINCT order_id)
+AS total,
+
+
+COUNT(DISTINCT order_id)
+FILTER(
+WHERE status='Pending'
+)
+AS pending,
+
+
+COUNT(DISTINCT order_id)
+FILTER(
+WHERE status='Approved'
+)
+AS approved,
+
+
+COUNT(DISTINCT order_id)
+FILTER(
+WHERE status='Shipped'
+)
+AS shipped,
+
+
+COUNT(DISTINCT order_id)
+FILTER(
+WHERE status='Completed'
+)
+AS completed
+
+
+
+FROM vorder
+
+
+
+`);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows[0]
+
+});
+
+
+}
+
+catch(error){
+
+
+res.status(500).json({
+
+success:false
+
+});
+
+
+}
+
+
+});
 
 
 
