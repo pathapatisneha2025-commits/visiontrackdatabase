@@ -705,6 +705,20 @@ planId
 
 
 
+if(!storeCode){
+
+return res.json({
+
+success:false,
+
+message:"Store code missing"
+
+});
+
+}
+
+
+
 // Find store
 
 const storeResult = await pool.query(
@@ -735,6 +749,44 @@ message:"Store not found"
 
 
 const store=storeResult.rows[0];
+
+
+
+
+// CHECK CURRENT PLAN STATUS
+
+const currentPlanResult = await pool.query(
+
+`
+SELECT status
+FROM subscription_plans
+WHERE plan_name=$1
+`,
+[
+store.plan_name
+]
+
+);
+
+
+
+if(
+currentPlanResult.rows.length>0 &&
+currentPlanResult.rows[0].status==="INACTIVE"
+){
+
+return res.json({
+
+success:false,
+
+inactivePlan:true,
+
+message:
+"Your current plan is inactive. Please select a new plan for renewal."
+
+});
+
+}
 
 
 
@@ -780,7 +832,6 @@ const plan=planResult.rows[0];
 
 let expiryDate=new Date();
 
-
 expiryDate.setDate(
 expiryDate.getDate()+plan.duration_days
 );
@@ -788,8 +839,7 @@ expiryDate.getDate()+plan.duration_days
 
 
 
-
-// Update store subscription
+// Update store
 
 await pool.query(
 
@@ -814,7 +864,7 @@ WHERE store_code=$4
 
 plan.plan_name,
 
-plan.amount,
+plan.price,
 
 expiryDate,
 
@@ -828,14 +878,12 @@ storeCode
 
 
 
-
 // Payment history
 
 await pool.query(
 
 `
 INSERT INTO subscription_payments
-
 (
 store_code,
 invoice_no,
@@ -862,7 +910,7 @@ storeCode,
 
 "OFFLINE",
 
-plan.amount,
+plan.price,
 
 plan.plan_name,
 
@@ -871,8 +919,6 @@ plan.plan_name,
 ]
 
 );
-
-
 
 
 
@@ -909,7 +955,6 @@ message:"Renewal failed"
 
 
 }
-
 
 });
 // ======================================
