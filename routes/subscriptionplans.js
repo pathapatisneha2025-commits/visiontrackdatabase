@@ -142,7 +142,73 @@ message:"Failed to add plan"
 
 
 
+// ===============================
+// GET ALL SUBSCRIPTION PLANS WITH STATUS
+// ===============================
 
+router.get("/subscriptions", async(req,res)=>{
+
+try{
+
+
+const result = await pool.query(
+
+`
+SELECT
+
+id,
+plan_name,
+price,
+duration_days,
+features,
+status,
+created_at,
+updated_at
+
+FROM subscription_plans
+
+ORDER BY id ASC
+
+`
+
+);
+
+
+
+res.json({
+
+success:true,
+
+count:result.rows.length,
+
+data:result.rows
+
+});
+
+
+}
+catch(error){
+
+
+console.log(
+"GET SUBSCRIPTIONS ERROR:",
+error
+);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to fetch subscriptions"
+
+});
+
+
+}
+
+
+});
 
 
 

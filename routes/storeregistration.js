@@ -1078,7 +1078,6 @@ message:"Rejection failed"
 
 });
 // Get active subscription plans for renewal
-// Get active subscription plans for renewal
 
 router.get("/active-plans", async(req,res)=>{
 
