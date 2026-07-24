@@ -1077,4 +1077,65 @@ message:"Rejection failed"
 }
 
 });
+// Get active subscription plans for renewal
+router.get("/active-plans", async(req,res)=>{
+
+try{
+
+
+const result = await pool.query(
+
+`
+SELECT
+id,
+plan_name,
+amount,
+duration_days,
+description
+
+FROM subscription_plans
+
+WHERE status='ACTIVE'
+
+ORDER BY amount ASC
+
+`
+
+);
+
+
+
+res.json({
+
+success:true,
+
+data:result.rows
+
+});
+
+
+}
+catch(error){
+
+
+console.log(
+"ACTIVE PLANS ERROR:",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to fetch active plans"
+
+});
+
+
+}
+
+
+});
 module.exports = router;
