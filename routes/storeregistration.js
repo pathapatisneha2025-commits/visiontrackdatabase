@@ -697,22 +697,44 @@ router.post("/renew-subscription", async(req,res)=>{
 
 try{
 
+
 const {
-storeCode
+    storeCode
 }=req.body;
 
 
-// Find store
+
+if(!storeCode){
+
+return res.json({
+
+success:false,
+
+message:"Store code required"
+
+});
+
+}
+
+
+
+
+// ===============================
+// FIND STORE
+// ===============================
 
 const storeResult = await pool.query(
+
 `
 SELECT *
 FROM stores
 WHERE store_code=$1
 `,
+
 [
 storeCode
 ]
+
 );
 
 
@@ -735,47 +757,30 @@ const store = storeResult.rows[0];
 
 
 
-// Calculate new expiry
 
-let expiryDate = new Date(store.expiry_date);
-
-
-// If expired, start from today
-
-if(expiryDate < new Date()){
-
-expiryDate = new Date();
-
-}
+// ===============================
+// CHECK PLAN STATUS
+// ===============================
 
 
-// Add 30 days
-
-expiryDate.setDate(
-expiryDate.getDate()+30
-);
-
-
-
-
-// Update store
-
-await pool.query(
+const planResult = await pool.query(
 
 `
-UPDATE stores
+SELECT 
+id,
+plan_name,
+status,
+duration_days,
+price
 
-SET
-subscription_status='ACTIVE',
-expiry_date=$1
+FROM subscription_plans
 
-WHERE store_code=$2
+WHERE plan_name=$1
 
 `,
 
 [
-expiryDate,
-storeCode
+store.plan_name
 ]
 
 );
@@ -783,12 +788,139 @@ storeCode
 
 
 
-// Insert payment history
+
+if(planResult.rows.length===0){
+
+return res.json({
+
+success:false,
+
+message:"Subscription plan not found"
+
+});
+
+}
+
+
+
+
+const plan = planResult.rows[0];
+
+
+
+
+// BLOCK INACTIVE PLAN
+
+if(plan.status !== "ACTIVE"){
+
+
+return res.json({
+
+success:false,
+
+planInactive:true,
+
+message:
+"Current subscription plan is inactive. Please select another plan."
+
+});
+
+
+}
+
+
+
+
+
+
+// ===============================
+// CALCULATE EXPIRY
+// ===============================
+
+
+let expiryDate = new Date(store.expiry_date);
+
+
+
+if(
+!store.expiry_date ||
+expiryDate < new Date()
+){
+
+expiryDate = new Date();
+
+}
+
+
+
+
+// Add plan duration days
+
+expiryDate.setDate(
+
+expiryDate.getDate() + Number(plan.duration_days)
+
+);
+
+
+
+
+
+
+// ===============================
+// UPDATE STORE
+// ===============================
+
+
+await pool.query(
+
+`
+UPDATE stores
+
+SET
+
+subscription_status='ACTIVE',
+
+expiry_date=$1,
+
+amount=$2,
+
+plan_name=$3
+
+WHERE store_code=$4
+
+`,
+
+[
+
+expiryDate,
+
+plan.price,
+
+plan.plan_name,
+
+storeCode
+
+]
+
+);
+
+
+
+
+
+
+
+// ===============================
+// INSERT PAYMENT HISTORY
+// ===============================
+
 
 await pool.query(
 
 `
 INSERT INTO subscription_payments
+
 (
 store_code,
 invoice_no,
@@ -800,6 +932,7 @@ payment_status
 )
 
 VALUES
+
 ($1,$2,$3,$4,$5,$6,$7)
 
 `,
@@ -814,9 +947,9 @@ storeCode,
 
 "OFFLINE",
 
-store.amount,
+plan.price,
 
-store.plan_name,
+plan.plan_name,
 
 "SUCCESS"
 
@@ -826,29 +959,55 @@ store.plan_name,
 
 
 
-res.json({
+
+
+
+// ===============================
+// RESPONSE
+// ===============================
+
+
+return res.json({
 
 success:true,
 
-message:"Subscription renewed successfully",
+message:
+"Subscription renewed successfully",
 
-expiryDate
+data:{
+
+plan_name:plan.plan_name,
+
+expiry_date:expiryDate,
+
+amount:plan.price
+
+}
 
 });
+
+
 
 
 }
 
 catch(error){
 
-console.log("Renew Error:",error);
+
+console.log(
+"Renew Subscription Error:",
+error
+);
 
 
-res.status(500).json({
+
+return res.status(500).json({
 
 success:false,
 
-message:"Renewal failed"
+message:"Renewal failed",
+
+error:error.message
 
 });
 
