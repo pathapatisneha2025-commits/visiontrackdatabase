@@ -94,334 +94,191 @@ message:"Server error"
 CREATE NEW EYE EXAM
 */
 
-router.post("/add",async(req,res)=>{
+router.post("/add", async (req, res) => {
+  try {
+    const {
+      storeCode,
 
+      patient_name,
+      patient_id,
+      mobile_number,
 
-try{
+      complaint,
+      history_notes,
 
+      od_vision,
+      od_ph,
 
-const {
+      os_vision,
+      os_ph,
 
+      right_sph,
+      right_cyl,
+      right_axis,
 
-storeCode,
+      left_sph,
+      left_cyl,
+      left_axis,
 
+      pd,
 
-patient_name,
+      od_iop,
+      os_iop,
 
-patient_id,
+      diagnosis,
 
+      rx,
 
-complaint,
+      notes,
 
-history_notes,
+      next_review_date,
+    } = req.body;
 
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code missing",
+      });
+    }
 
-od_vision,
+    const result = await pool.query(
+      `
+      INSERT INTO eye_exams
+      (
+        store_code,
 
-od_ph,
+        patient_name,
+        patient_id,
+        mobile_number,
 
+        complaint,
+        history_notes,
 
-os_vision,
+        od_vision,
+        od_ph,
 
-os_ph,
+        os_vision,
+        os_ph,
 
+        right_sph,
+        right_cyl,
+        right_axis,
 
+        left_sph,
+        left_cyl,
+        left_axis,
 
-right_sph,
+        pd,
 
-right_cyl,
+        od_iop,
+        os_iop,
 
-right_axis,
+        diagnosis,
 
+        rx,
 
-left_sph,
+        notes,
 
-left_cyl,
+        next_review_date,
 
-left_axis,
+        exam_date
+      )
 
+      VALUES
+      (
+        $1,
 
+        $2,
+        $3,
+        $4,
 
-pd,
+        $5,
+        $6,
 
+        $7,
+        $8,
 
-od_iop,
+        $9,
+        $10,
 
-os_iop,
+        $11,
+        $12,
+        $13,
 
+        $14,
+        $15,
+        $16,
 
+        $17,
 
-diagnosis,
+        $18,
+        $19,
 
+        $20,
 
-rx,
+        $21,
 
+        $22,
 
-notes,
+        $23,
 
+        NOW()
+      )
 
-next_review_date
+      RETURNING *
+      `,
+      [
+        storeCode,
 
+        patient_name,
+        patient_id,
+        mobile_number,
 
+        complaint,
+        history_notes,
 
-}=req.body;
+        od_vision,
+        od_ph,
 
+        os_vision,
+        os_ph,
 
+        right_sph,
+        right_cyl,
+        right_axis,
 
-if(!storeCode){
+        left_sph,
+        left_cyl,
+        left_axis,
 
-return res.status(400).json({
+        pd,
 
-success:false,
+        od_iop,
+        os_iop,
 
-message:"Store code missing"
+        diagnosis,
 
-});
+        rx,
 
-}
+        notes,
 
+        next_review_date,
+      ]
+    );
 
+    res.json({
+      success: true,
+      message: "Eye examination saved successfully",
+      exam: result.rows[0],
+    });
+  } catch (error) {
+    console.log("SAVE EYE EXAM ERROR:", error);
 
-
-const result = await pool.query(
-
-`
-
-INSERT INTO eye_exams
-
-(
-
-store_code,
-
-
-patient_name,
-
-patient_id,
-
-
-complaint,
-
-history_notes,
-
-
-od_vision,
-
-od_ph,
-
-
-os_vision,
-
-os_ph,
-
-
-right_sph,
-
-right_cyl,
-
-right_axis,
-
-
-left_sph,
-
-left_cyl,
-
-left_axis,
-
-
-pd,
-
-
-od_iop,
-
-os_iop,
-
-
-diagnosis,
-
-
-rx,
-
-
-notes,
-
-
-next_review_date,
-
-
-exam_date
-
-)
-
-
-VALUES
-
-(
-
-$1,
-
-$2,
-
-$3,
-
-
-$4,
-
-$5,
-
-
-$6,
-
-$7,
-
-
-$8,
-
-$9,
-
-
-$10,
-
-$11,
-
-$12,
-
-
-$13,
-
-$14,
-
-$15,
-
-
-$16,
-
-
-$17,
-
-$18,
-
-
-$19,
-
-
-$20,
-
-
-$21,
-
-
-$22,
-
-
-NOW()
-
-)
-
-
-RETURNING *
-
-`,
-
-
-[
-
-
-storeCode,
-
-
-patient_name,
-
-patient_id,
-
-
-complaint,
-
-history_notes,
-
-
-od_vision,
-
-od_ph,
-
-
-os_vision,
-
-os_ph,
-
-
-right_sph,
-
-right_cyl,
-
-right_axis,
-
-
-left_sph,
-
-left_cyl,
-
-left_axis,
-
-
-pd,
-
-
-od_iop,
-
-os_iop,
-
-
-diagnosis,
-
-
-rx,
-
-
-notes,
-
-
-next_review_date
-
-
-]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-message:"Eye examination saved successfully",
-
-exam:result.rows[0]
-
-});
-
-
-
-}
-
-catch(error){
-
-
-console.log("SAVE EYE EXAM ERROR:",error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Error saving eye exam"
-
-});
-
-
-}
-
-
+    res.status(500).json({
+      success: false,
+      message: "Error saving eye exam",
+    });
+  }
 });
 
 
