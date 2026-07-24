@@ -1078,6 +1078,8 @@ message:"Rejection failed"
 
 });
 // Get active subscription plans for renewal
+// Get active subscription plans for renewal
+
 router.get("/active-plans", async(req,res)=>{
 
 try{
@@ -1087,17 +1089,22 @@ const result = await pool.query(
 
 `
 SELECT
+
 id,
+
 plan_name,
-amount,
+
+price,
+
 duration_days,
-description
+
+features
 
 FROM subscription_plans
 
 WHERE status='ACTIVE'
 
-ORDER BY amount ASC
+ORDER BY price ASC
 
 `
 
