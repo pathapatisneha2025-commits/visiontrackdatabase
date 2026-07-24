@@ -697,9 +697,12 @@ router.post("/renew-subscription", async(req,res)=>{
 
 try{
 
+
 const {
-storeCode
+storeCode,
+planId
 }=req.body;
+
 
 
 // Find store
@@ -731,34 +734,62 @@ message:"Store not found"
 
 
 
-const store = storeResult.rows[0];
+const store=storeResult.rows[0];
 
 
 
-// Calculate new expiry
 
-let expiryDate = new Date(store.expiry_date);
+// Get selected active plan
+
+const planResult=await pool.query(
+
+`
+SELECT *
+FROM subscription_plans
+WHERE id=$1
+AND status='ACTIVE'
+`,
+[
+planId
+]
+
+);
 
 
-// If expired, start from today
 
-if(expiryDate < new Date()){
+if(planResult.rows.length===0){
 
-expiryDate = new Date();
+return res.json({
+
+success:false,
+
+message:"Selected plan is not available"
+
+});
 
 }
 
 
-// Add 30 days
+
+const plan=planResult.rows[0];
+
+
+
+
+// Calculate expiry
+
+let expiryDate=new Date();
+
 
 expiryDate.setDate(
-expiryDate.getDate()+30
+expiryDate.getDate()+plan.duration_days
 );
 
 
 
 
-// Update store
+
+// Update store subscription
 
 await pool.query(
 
@@ -766,16 +797,29 @@ await pool.query(
 UPDATE stores
 
 SET
-subscription_status='ACTIVE',
-expiry_date=$1
 
-WHERE store_code=$2
+subscription_status='ACTIVE',
+
+plan_name=$1,
+
+amount=$2,
+
+expiry_date=$3
+
+WHERE store_code=$4
 
 `,
 
 [
+
+plan.plan_name,
+
+plan.amount,
+
 expiryDate,
+
 storeCode
+
 ]
 
 );
@@ -783,12 +827,15 @@ storeCode
 
 
 
-// Insert payment history
+
+
+// Payment history
 
 await pool.query(
 
 `
 INSERT INTO subscription_payments
+
 (
 store_code,
 invoice_no,
@@ -800,6 +847,7 @@ payment_status
 )
 
 VALUES
+
 ($1,$2,$3,$4,$5,$6,$7)
 
 `,
@@ -814,9 +862,9 @@ storeCode,
 
 "OFFLINE",
 
-store.amount,
+plan.amount,
 
-store.plan_name,
+plan.plan_name,
 
 "SUCCESS"
 
@@ -826,22 +874,29 @@ store.plan_name,
 
 
 
+
+
 res.json({
 
 success:true,
 
 message:"Subscription renewed successfully",
 
+plan:plan.plan_name,
+
 expiryDate
 
 });
 
 
-}
 
+}
 catch(error){
 
-console.log("Renew Error:",error);
+console.log(
+"Renew Error:",
+error
+);
 
 
 res.status(500).json({
