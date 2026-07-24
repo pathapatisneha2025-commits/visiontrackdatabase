@@ -697,26 +697,9 @@ router.post("/renew-subscription", async(req,res)=>{
 
 try{
 
-
 const {
-storeCode,
-planId
+storeCode
 }=req.body;
-
-
-
-if(!storeCode){
-
-return res.json({
-
-success:false,
-
-message:"Store code missing"
-
-});
-
-}
-
 
 
 // Find store
@@ -748,92 +731,28 @@ message:"Store not found"
 
 
 
-const store=storeResult.rows[0];
+const store = storeResult.rows[0];
 
 
 
+// Calculate new expiry
 
-// CHECK CURRENT PLAN STATUS
-
-const currentPlanResult = await pool.query(
-
-`
-SELECT status
-FROM subscription_plans
-WHERE plan_name=$1
-`,
-[
-store.plan_name
-]
-
-);
+let expiryDate = new Date(store.expiry_date);
 
 
+// If expired, start from today
 
-if(
-currentPlanResult.rows.length>0 &&
-currentPlanResult.rows[0].status==="INACTIVE"
-){
+if(expiryDate < new Date()){
 
-return res.json({
-
-success:false,
-
-inactivePlan:true,
-
-message:
-"Your current plan is inactive. Please select a new plan for renewal."
-
-});
+expiryDate = new Date();
 
 }
 
 
-
-
-// Get selected active plan
-
-const planResult=await pool.query(
-
-`
-SELECT *
-FROM subscription_plans
-WHERE id=$1
-AND status='ACTIVE'
-`,
-[
-planId
-]
-
-);
-
-
-
-if(planResult.rows.length===0){
-
-return res.json({
-
-success:false,
-
-message:"Selected plan is not available"
-
-});
-
-}
-
-
-
-const plan=planResult.rows[0];
-
-
-
-
-// Calculate expiry
-
-let expiryDate=new Date();
+// Add 30 days
 
 expiryDate.setDate(
-expiryDate.getDate()+plan.duration_days
+expiryDate.getDate()+30
 );
 
 
@@ -847,29 +766,16 @@ await pool.query(
 UPDATE stores
 
 SET
-
 subscription_status='ACTIVE',
+expiry_date=$1
 
-plan_name=$1,
-
-amount=$2,
-
-expiry_date=$3
-
-WHERE store_code=$4
+WHERE store_code=$2
 
 `,
 
 [
-
-plan.plan_name,
-
-plan.price,
-
 expiryDate,
-
 storeCode
-
 ]
 
 );
@@ -877,8 +783,7 @@ storeCode
 
 
 
-
-// Payment history
+// Insert payment history
 
 await pool.query(
 
@@ -895,7 +800,6 @@ payment_status
 )
 
 VALUES
-
 ($1,$2,$3,$4,$5,$6,$7)
 
 `,
@@ -910,9 +814,9 @@ storeCode,
 
 "OFFLINE",
 
-plan.price,
+store.amount,
 
-plan.plan_name,
+store.plan_name,
 
 "SUCCESS"
 
@@ -928,21 +832,16 @@ success:true,
 
 message:"Subscription renewed successfully",
 
-plan:plan.plan_name,
-
 expiryDate
 
 });
 
 
-
 }
+
 catch(error){
 
-console.log(
-"Renew Error:",
-error
-);
+console.log("Renew Error:",error);
 
 
 res.status(500).json({
@@ -955,6 +854,7 @@ message:"Renewal failed"
 
 
 }
+
 
 });
 // ======================================
@@ -1120,73 +1020,6 @@ message:"Rejection failed"
 
 
 }
-
-});
-// Get active subscription plans for renewal
-
-router.get("/active-plans", async(req,res)=>{
-
-try{
-
-
-const result = await pool.query(
-
-`
-SELECT
-
-id,
-
-plan_name,
-
-price,
-
-duration_days,
-
-features
-
-FROM subscription_plans
-
-WHERE status='ACTIVE'
-
-ORDER BY price ASC
-
-`
-
-);
-
-
-
-res.json({
-
-success:true,
-
-data:result.rows
-
-});
-
-
-}
-catch(error){
-
-
-console.log(
-"ACTIVE PLANS ERROR:",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Failed to fetch active plans"
-
-});
-
-
-}
-
 
 });
 module.exports = router;
