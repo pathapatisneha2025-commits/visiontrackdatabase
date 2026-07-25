@@ -83,9 +83,13 @@ readable.pipe(stream);
 // ==========================
 
 
+// ==========================
+// ADD PRODUCT WITH VARIANTS
+// ==========================
+
 router.post(
 "/add",
-upload.single("image"),
+upload.any(),
 async(req,res)=>{
 
 
@@ -102,31 +106,40 @@ product_name,
 
 description,
 
-mrp,
-
-sku
+variants
 
 
 }=req.body;
 
 
 
-let image="";
+// ==========================
+// UPLOAD VARIANT IMAGES
+// ==========================
+
+
+let uploadedImages={};
 
 
 
-// UPLOAD IMAGE
+if(req.files && req.files.length>0){
 
-if(req.file){
+
+for(const file of req.files){
 
 
 const result =
 await uploadToCloudinary(
-req.file.buffer
+file.buffer
 );
 
 
-image=result.secure_url;
+
+uploadedImages[file.fieldname]=
+result.secure_url;
+
+
+}
 
 
 }
@@ -134,27 +147,70 @@ image=result.secure_url;
 
 
 
-const data=await pool.query(
+// ==========================
+// CONVERT VARIANTS
+// ==========================
+
+
+let finalVariants=[];
+
+
+if(variants){
+
+
+const parsedVariants =
+JSON.parse(variants);
+
+
+
+finalVariants =
+parsedVariants.map((v,index)=>({
+
+
+color:v.color,
+
+price:v.price,
+
+sku:v.sku,
+
+
+image:
+uploadedImages[`variant_images_${index}`]
+||
+v.existingImage
+||
+""
+
+
+
+}));
+
+
+}
+
+
+
+
+
+// ==========================
+// INSERT PRODUCT
+// ==========================
+
+
+const data = await pool.query(
 
 `
-
 INSERT INTO master_products
-
 (
 category_id,
 brand_id,
 product_name,
 description,
-image,
-mrp,
-sku
+variants
 )
 
-
 VALUES
-
-($1,$2,$3,$4,$5,$6,$7)
-
+($1,$2,$3,$4,$5)
 
 RETURNING *
 
@@ -170,11 +226,7 @@ product_name,
 
 description,
 
-image,
-
-mrp,
-
-sku
+JSON.stringify(finalVariants)
 
 ]
 
@@ -183,10 +235,11 @@ sku
 
 
 
-
 res.json({
 
 success:true,
+
+message:"Product Added Successfully",
 
 data:data.rows[0]
 
@@ -198,7 +251,8 @@ data:data.rows[0]
 
 catch(error){
 
-console.log(error);
+
+console.log("ADD PRODUCT ERROR",error);
 
 
 res.status(500).json({
@@ -214,7 +268,6 @@ message:"Server Error"
 
 
 });
-
 
 
 
@@ -386,12 +439,13 @@ success:false
 // ==========================
 
 
+// ==========================
+// UPDATE PRODUCT WITH VARIANTS
+// ==========================
+
 router.put(
-
 "/update/:id",
-
-upload.single("image"),
-
+upload.any(),
 async(req,res)=>{
 
 
@@ -399,7 +453,6 @@ try{
 
 
 const id=req.params.id;
-
 
 
 const {
@@ -412,22 +465,23 @@ product_name,
 
 description,
 
-mrp,
-
-sku
+variants
 
 
 }=req.body;
 
 
 
+// ==========================
+// CHECK PRODUCT
+// ==========================
 
-// GET OLD PRODUCT
 
 const oldProduct = await pool.query(
 
 `
-SELECT * FROM master_products
+SELECT *
+FROM master_products
 WHERE id=$1
 `,
 
@@ -439,12 +493,91 @@ WHERE id=$1
 
 if(oldProduct.rows.length===0){
 
-
 return res.json({
 
 success:false,
 
 message:"Product not found"
+
+});
+
+}
+
+
+
+// ==========================
+// UPLOAD NEW VARIANT IMAGES
+// ==========================
+
+
+let uploadedImages={};
+
+
+
+if(req.files && req.files.length>0){
+
+
+for(const file of req.files){
+
+
+const result =
+await uploadToCloudinary(
+file.buffer
+);
+
+
+
+uploadedImages[file.fieldname]=
+result.secure_url;
+
+
+}
+
+
+}
+
+
+
+// ==========================
+// PREPARE VARIANTS
+// ==========================
+
+
+let finalVariants=[];
+
+
+if(variants){
+
+
+const parsedVariants =
+JSON.parse(variants);
+
+
+
+finalVariants =
+parsedVariants.map((v,index)=>{
+
+
+return {
+
+color:v.color,
+
+price:v.price,
+
+sku:v.sku,
+
+
+// new image OR old image
+
+image:
+uploadedImages[`variant_images_${index}`]
+||
+v.existingImage
+||
+""
+
+};
+
 
 });
 
@@ -454,36 +587,15 @@ message:"Product not found"
 
 
 
-let image =
-oldProduct.rows[0].image;
-
-
-
-
-// NEW IMAGE UPLOAD
-
-if(req.file){
-
-
-const result =
-await uploadToCloudinary(
-req.file.buffer
-);
-
-
-image=result.secure_url;
-
-
-}
-
-
+// ==========================
+// UPDATE PRODUCT
+// ==========================
 
 
 const updated =
 await pool.query(
 
 `
-
 UPDATE master_products
 
 SET
@@ -496,14 +608,10 @@ product_name=$3,
 
 description=$4,
 
-image=$5,
-
-mrp=$6,
-
-sku=$7
+variants=$5
 
 
-WHERE id=$8
+WHERE id=$6
 
 
 RETURNING *
@@ -511,6 +619,7 @@ RETURNING *
 `,
 
 [
+
 
 category_id,
 
@@ -520,16 +629,12 @@ product_name,
 
 description,
 
-image,
-
-mrp,
-
-sku,
+JSON.stringify(finalVariants),
 
 id
 
-]
 
+]
 
 );
 
@@ -540,9 +645,9 @@ res.json({
 
 success:true,
 
-data:updated.rows[0],
+message:"Product Updated Successfully",
 
-message:"Product Updated"
+data:updated.rows[0]
 
 });
 
@@ -550,14 +655,22 @@ message:"Product Updated"
 
 }
 
+
 catch(error){
 
-console.log(error);
+
+console.log(
+"UPDATE PRODUCT ERROR",
+error
+);
+
 
 
 res.status(500).json({
 
-success:false
+success:false,
+
+message:"Server Error"
 
 });
 
