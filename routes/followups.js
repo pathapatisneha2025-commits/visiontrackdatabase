@@ -6,6 +6,43 @@ const pool=require("../db");
 
 // GET FOLLOWUPS
 
+router.get("/all", async (req, res) => {
+  try {
+    const { storeCode } = req.query;
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        patient_id,
+        patient_name,
+        mobile_number,
+        next_review_date AS followup_date,
+        diagnosis,
+        complaint
+      FROM eyeexam
+      WHERE store_code = $1
+      AND next_review_date IS NOT NULL
+      ORDER BY next_review_date ASC
+      `,
+      [storeCode]
+    );
+
+    res.json({
+      success: true,
+      followups: result.rows,
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load followups",
+    });
+  }
+});
+
+
 router.get("/",async(req,res)=>{
 
 try{
