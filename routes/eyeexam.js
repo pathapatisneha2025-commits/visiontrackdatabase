@@ -290,75 +290,43 @@ router.post("/add", async (req, res) => {
 /*
 GET SINGLE EXAM
 */
+router.get("/:id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        e.*,
+        s.store_name,
+        s.owner_name,
+        s.address,
+        s.mobile
+      FROM eye_exams e
+      LEFT JOIN stores s
+        ON e.store_code = s.store_code
+      WHERE e.id = $1
+      `,
+      [req.params.id]
+    );
 
-router.get("/:id",async(req,res)=>{
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
+    }
 
+    res.json({
+      success: true,
+      exam: result.rows[0],
+    });
+  } catch (error) {
+    console.log("GET SINGLE EXAM ERROR:", error);
 
-try{
-
-
-const result = await pool.query(
-
-`
-
-SELECT *
-
-FROM eye_exams
-
-WHERE id=$1
-
-`,
-
-[
-req.params.id
-]
-
-);
-
-
-
-if(result.rows.length===0){
-
-return res.status(404).json({
-
-success:false,
-
-message:"Exam not found"
-
-});
-
-}
-
-
-
-res.json({
-
-success:true,
-
-exam:result.rows[0]
-
-});
-
-
-}
-catch(error){
-
-
-console.log("GET SINGLE EXAM ERROR:",error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Server error"
-
-});
-
-
-}
-
-
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
 });
 
 
