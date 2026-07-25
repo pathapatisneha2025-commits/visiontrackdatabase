@@ -20,7 +20,7 @@ router.get("/all", async (req, res) => {
         next_review_date AS followup_date,
         diagnosis,
         complaint
-      FROM eyeexam
+      FROM eye_exams
       WHERE store_code = $1
       AND next_review_date IS NOT NULL
       ORDER BY next_review_date ASC
