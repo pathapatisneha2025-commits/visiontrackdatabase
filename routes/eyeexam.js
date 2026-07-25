@@ -10,82 +10,56 @@ GET ALL EYE EXAMS BY STORE CODE
 SEARCH BY PATIENT NAME OR PATIENT ID
 */
 
-router.get("/", async(req,res)=>{
+router.get("/", async (req, res) => {
+  try {
+    const {
+      storeCode,
+      search = ""
+    } = req.query;
 
-try{
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code required"
+      });
+    }
 
-const {
-storeCode,
-search=""
-}=req.query;
+    const result = await pool.query(
+      `
+      SELECT
+        e.*,
+        s.store_name
+      FROM eye_exams e
+      LEFT JOIN stores s
+        ON e.store_code = s.store_code
+      WHERE e.store_code = $1
+      AND (
+        e.patient_name ILIKE $2
+        OR e.patient_id ILIKE $2
+      )
+      ORDER BY e.id DESC
+      `,
+      [
+        storeCode,
+        `%${search}%`
+      ]
+    );
 
+    res.json({
+      success: true,
+      count: result.rows.length,
+      exams: result.rows
+    });
 
-if(!storeCode){
+  } catch (error) {
+    console.log("GET EYE EXAMS ERROR:", error);
 
-return res.status(400).json({
-success:false,
-message:"Store code required"
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
 });
-
-}
-
-
-const result = await pool.query(
-
-`
-SELECT *
-
-FROM eye_exams
-
-WHERE store_code=$1
-
-AND
-(
-patient_name ILIKE $2
-OR patient_id ILIKE $2
-)
-
-ORDER BY id DESC
-
-`,
-[
-storeCode,
-`%${search}%`
-]
-
-);
-
-
-
-res.json({
-
-success:true,
-
-count:result.rows.length,
-
-exams:result.rows
-
-});
-
-
-}
-catch(error){
-
-console.log("GET EYE EXAMS ERROR:",error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Server error"
-
-});
-
-}
-
-});
-
 
 
 
