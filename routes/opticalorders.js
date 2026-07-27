@@ -586,9 +586,17 @@ router.put("/orders/delete/:id", async(req,res)=>{
 
 try{
 
-const {id}=req.params;
+const { id } = req.params;
 
-const adminId=req.body.user_id;
+const { deleted_by, storeCode } = req.body;
+
+
+if(!storeCode){
+  return res.status(400).json({
+    success:false,
+    message:"Store code missing"
+  });
+}
 
 
 // Soft delete order
@@ -603,10 +611,13 @@ deleted_at=NOW(),
 deleted_by=$1
 
 WHERE id=$2
+AND store_code=$3
+
 `,
 [
-adminId,
-id
+deleted_by,
+id,
+storeCode
 ]
 );
 
@@ -622,7 +633,8 @@ module,
 record_id,
 record_no,
 customer_name,
-deleted_by
+deleted_by,
+store_code
 )
 
 SELECT
@@ -631,16 +643,19 @@ SELECT
 id,
 order_no,
 patient_name,
-$1
+$1,
+store_code
 
 FROM optical_orders
 
 WHERE id=$2
+AND store_code=$3
 
 `,
 [
-adminId,
-id
+deleted_by,
+id,
+storeCode
 ]
 );
 
@@ -659,7 +674,7 @@ message:"Order moved to delete history"
 
 catch(error){
 
-console.log(error);
+console.log("DELETE ERROR:",error);
 
 res.status(500).json({
 
@@ -669,7 +684,6 @@ error:error.message
 });
 
 }
-
 
 });
 // =====================================
