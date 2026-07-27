@@ -264,17 +264,14 @@ GET ALL PATIENTS OF STORE
 */
 
 
-router.get("/",async(req,res)=>{
-
+router.get("/", async(req,res)=>{
 
 try{
 
-
 const {
-storeCode,
-search=""
+  storeCode,
+  search=""
 }=req.query;
-
 
 
 if(!storeCode){
@@ -282,7 +279,6 @@ if(!storeCode){
 return res.status(400).json({
 
 success:false,
-
 message:"Store code required"
 
 });
@@ -290,15 +286,15 @@ message:"Store code required"
 }
 
 
-
-
-let query=`
+let query = `
 
 SELECT *
 
 FROM patients
 
 WHERE store_code=$1
+
+AND is_deleted=false
 
 AND
 (
@@ -312,7 +308,6 @@ ORDER BY id DESC
 `;
 
 
-
 const values=[
 
 storeCode,
@@ -322,13 +317,10 @@ storeCode,
 ];
 
 
-
-const result=
-await pool.query(
+const result = await pool.query(
 query,
 values
 );
-
 
 
 res.json({
@@ -339,18 +331,14 @@ count:result.rows.length,
 
 patients:result.rows
 
-
 });
-
 
 
 }
 
 catch(error){
 
-
 console.log(error);
-
 
 res.status(500).json({
 
@@ -360,14 +348,9 @@ message:"Server error"
 
 });
 
-
 }
 
-
-
 });
-
-
 
 
 
