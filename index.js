@@ -19,7 +19,7 @@ const PlaceOrders = require("./routes/orders.js");
 
 
 
-
+require("./cron/Subscriptiondeactivation");
 require("dotenv").config();
 
 const app = express();
