@@ -3,7 +3,7 @@ const db = require("../db"); // your postgres connection
 
 
 // Runs every day at 12:00 AM
-cron.schedule("0 0 * * *", async()=>{
+cron.schedule("* * * * *", async()=>{
 
 
 try{
