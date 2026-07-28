@@ -2,7 +2,8 @@ const cron = require("node-cron");
 const db = require("../db"); // your postgres connection
 
 
-// Runs every day at 12:00 AM
+// TEST: Runs every minute
+// Production: change to "0 0 * * *"
 cron.schedule("* * * * *", async()=>{
 
 
@@ -18,7 +19,7 @@ const result = await db.query(`
 UPDATE stores
 
 SET 
-subscription_status = 'INACTIVE'
+subscription_status = 'DEACTIVATED'
 
 WHERE 
 expiry_date < NOW()
@@ -47,7 +48,6 @@ error
 
 
 }
-
 
 
 });
