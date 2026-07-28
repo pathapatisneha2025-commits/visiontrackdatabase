@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const pool = require("../db");
+const bwipjs = require("bwip-js");
 
 
 
@@ -17,15 +18,12 @@ const generateBarcode = async (storeCode, category) => {
     if(category === "frames"){
         prefix = "FRM";
     }
-
     else if(category === "lenses"){
         prefix = "LEN";
     }
-
     else if(category === "contact_lenses"){
         prefix = "CL";
     }
-
     else if(category === "accessories"){
         prefix = "ACC";
     }
@@ -65,7 +63,7 @@ const generateBarcode = async (storeCode, category) => {
 
 
 /*
-GET STOCK
+GET ALL STOCK
 */
 
 router.get("/all", async(req,res)=>{
@@ -209,9 +207,11 @@ quantity
 
 
 
-// Generate barcode if empty
+
+// Generate barcode automatically
 
 let finalBarcode = barcode;
+
 
 
 if(!finalBarcode){
@@ -223,6 +223,57 @@ category
 );
 
 }
+
+
+
+
+
+
+/*
+ Generate Barcode Image
+*/
+
+let barcodeImage = null;
+
+
+try{
+
+
+const png = await bwipjs.toBuffer({
+
+bcid:"code128",
+
+text:finalBarcode,
+
+scale:3,
+
+height:12,
+
+includetext:true,
+
+textxalign:"center"
+
+});
+
+
+
+barcodeImage =
+`data:image/png;base64,${png.toString("base64")}`;
+
+
+}
+
+catch(err){
+
+console.log(
+"Barcode image generation error",
+err
+);
+
+}
+
+
+
 
 
 
@@ -379,15 +430,22 @@ quantity || 0
 
 
 
+
 res.json({
 
 success:true,
 
 message:"Stock added successfully",
 
+
 barcode:finalBarcode,
 
+
+barcodeImage,
+
+
 stock:result.rows[0]
+
 
 });
 
@@ -417,6 +475,105 @@ message:"Stock adding failed"
 
 
 });
+
+
+
+
+
+
+
+
+
+
+/*
+SCAN BARCODE
+*/
+
+router.get("/scan/:barcode", async(req,res)=>{
+
+
+try{
+
+
+const {
+barcode
+}=req.params;
+
+
+
+const result = await pool.query(
+
+`
+SELECT *
+
+FROM stock_inventory
+
+WHERE barcode=$1
+`,
+[
+barcode
+]
+
+);
+
+
+
+
+
+if(result.rows.length===0){
+
+
+return res.status(404).json({
+
+success:false,
+
+message:"Barcode not found"
+
+});
+
+
+}
+
+
+
+
+
+
+res.json({
+
+success:true,
+
+stock:result.rows[0]
+
+});
+
+
+
+
+}
+
+catch(error){
+
+
+console.log(error);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Barcode scan failed"
+
+});
+
+
+}
+
+
+
+});
+
 
 
 
