@@ -4,7 +4,7 @@ const db = require("../db"); // your postgres connection
 
 // TEST: Runs every minute
 // Production: change to "0 0 * * *"
-cron.schedule("* * * * *", async()=>{
+cron.schedule("0 0 * * *", async()=>{
 
 
 try{
