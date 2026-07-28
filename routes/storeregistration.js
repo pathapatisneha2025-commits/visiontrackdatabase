@@ -261,7 +261,6 @@ const result = await pool.query(
 SELECT *
 FROM stores
 WHERE email=$1
-AND subscription_status='ACTIVE'
 `,
 
 [
@@ -277,6 +276,7 @@ if(result.rows.length===0){
 return res.status(401).json({
 
 success:false,
+
 message:"Email not registered"
 
 });
@@ -286,6 +286,27 @@ message:"Email not registered"
 
 
 const store = result.rows[0];
+
+
+
+
+// CHECK IF ADMIN DEACTIVATED ACCOUNT
+
+if(store.subscription_status==="INACTIVE"){
+
+return res.status(403).json({
+
+success:false,
+
+accountInactive:true,
+
+message:
+"Your account is inactive. Please contact administrator."
+
+});
+
+}
+
 
 
 
@@ -307,6 +328,7 @@ if(!passwordMatch){
 return res.status(401).json({
 
 success:false,
+
 message:"Invalid password"
 
 });
@@ -316,26 +338,70 @@ message:"Invalid password"
 
 
 
-// LOGIN SUCCESS RESPONSE
+
+// CHECK SUBSCRIPTION STATUS MESSAGE
+
+let loginMessage="Login successful";
+
+
+let planExpired=false;
+
+
+
+if(store.subscription_status==="DEACTIVATED"){
+
+loginMessage =
+"Your subscription has expired. Please renew your plan to access all modules.";
+
+
+planExpired=true;
+
+}
+
+
+
+
+
+// LOGIN SUCCESS
 
 res.json({
 
 success:true,
 
-message:"Login successful",
 
+message:loginMessage,
+
+
+
+// SUBSCRIPTION DETAILS
+
+subscriptionStatus:
+store.subscription_status,
+
+
+planExpired:planExpired,
+
+
+
+// STORE DETAILS
 
 store:{
 
+
 id:store.id,
+
 
 storeCode:store.store_code,
 
+
 storeName:store.store_name,
+
 
 ownerName:store.owner_name,
 
+
 email:store.email
+
 
 }
 
@@ -345,10 +411,14 @@ email:store.email
 
 
 }
-
 catch(error){
 
-console.log("Login Error:",error);
+
+console.log(
+"Login Error:",
+error
+);
+
 
 
 res.status(500).json({
