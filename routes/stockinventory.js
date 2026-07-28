@@ -1,7 +1,66 @@
-const express=require("express");
-const router=express.Router();
+const express = require("express");
+const router = express.Router();
 
-const pool=require("../db");
+const pool = require("../db");
+
+
+
+/*
+ Generate Barcode
+*/
+
+const generateBarcode = async (storeCode, category) => {
+
+    let prefix = "STK";
+
+
+    if(category === "frames"){
+        prefix = "FRM";
+    }
+
+    else if(category === "lenses"){
+        prefix = "LEN";
+    }
+
+    else if(category === "contact_lenses"){
+        prefix = "CL";
+    }
+
+    else if(category === "accessories"){
+        prefix = "ACC";
+    }
+
+
+
+    const countResult = await pool.query(
+
+        `
+        SELECT COUNT(*) 
+        FROM stock_inventory
+        WHERE store_code=$1
+        `,
+        [
+            storeCode
+        ]
+
+    );
+
+
+    const count =
+    Number(countResult.rows[0].count) + 1;
+
+
+
+    const barcode =
+    `${prefix}-${storeCode}-${String(count).padStart(5,"0")}`;
+
+
+
+    return barcode;
+
+};
+
+
 
 
 
@@ -9,32 +68,35 @@ const pool=require("../db");
 GET STOCK
 */
 
-router.get("/",async(req,res)=>{
+router.get("/all", async(req,res)=>{
+
 
 try{
+
 
 const {
 storeCode
 }=req.query;
 
 
-const result=await pool.query(
+
+const result = await pool.query(
 
 `
 SELECT *
 
-FROM optical_stock
+FROM stock_inventory
 
 WHERE store_code=$1
 
 ORDER BY id DESC
-
 `,
 [
 storeCode
 ]
 
 );
+
 
 
 res.json({
@@ -46,21 +108,28 @@ stocks:result.rows
 });
 
 
+
 }
+
 catch(error){
 
 console.log(error);
 
+
 res.status(500).json({
 
-success:false
+success:false,
+message:"Failed to fetch stock"
 
 });
+
 
 }
 
 
+
 });
+
 
 
 
@@ -72,17 +141,22 @@ success:false
 ADD STOCK
 */
 
-
-router.post("/add",async(req,res)=>{
+router.post("/add", async(req,res)=>{
 
 
 try{
+
+
+const body=req.body;
+
 
 
 const {
 
 storeCode,
 
+category,
+
 barcode,
 
 brand,
@@ -95,34 +169,81 @@ color,
 
 size,
 
+material,
+
+gender,
+
+
+lens_type,
+
+power_range,
+
+coating,
+
+index: lens_index,
+
+
+type: contact_type,
+
+power,
+
+base_curve,
+
+diameter,
+
+expiry_date,
+
+
+accessory_name,
+
+
 purchase_price,
 
 selling_price,
 
-supplier,
-
-quantity,
-
-rack_location
+quantity
 
 
-}=req.body;
+}=body;
 
 
 
-const result=await pool.query(
+
+// Generate barcode if empty
+
+let finalBarcode = barcode;
+
+
+if(!finalBarcode){
+
+finalBarcode =
+await generateBarcode(
+storeCode,
+category
+);
+
+}
+
+
+
+
+
+const result = await pool.query(
 
 `
 
-INSERT INTO optical_stock
+INSERT INTO stock_inventory
 
 (
 
 store_code,
 
+category,
+
 barcode,
 
 brand,
+
 
 frame_name,
 
@@ -132,26 +253,60 @@ color,
 
 size,
 
+material,
+
+gender,
+
+
+lens_type,
+
+power_range,
+
+coating,
+
+lens_index,
+
+
+contact_type,
+
+power,
+
+base_curve,
+
+diameter,
+
+expiry_date,
+
+
+accessory_name,
+
+
 purchase_price,
 
 selling_price,
 
-supplier,
+quantity
 
-quantity,
-
-rack_location
 
 )
 
 
 VALUES
 
+
 (
 
-$1,$2,$3,$4,$5,$6,
+$1,$2,$3,$4,
 
-$7,$8,$9,$10,$11,$12
+$5,$6,$7,$8,$9,$10,
+
+$11,$12,$13,$14,
+
+$15,$16,$17,$18,$19,
+
+$20,
+
+$21,$22,$23
 
 )
 
@@ -162,11 +317,15 @@ RETURNING *
 
 [
 
+
 storeCode,
 
-barcode,
+category,
+
+finalBarcode,
 
 brand,
+
 
 frame_name,
 
@@ -176,15 +335,40 @@ color,
 
 size,
 
-purchase_price,
+material,
 
-selling_price,
+gender,
 
-supplier,
 
-quantity,
+lens_type,
 
-rack_location
+power_range,
+
+coating,
+
+lens_index,
+
+
+contact_type,
+
+power,
+
+base_curve,
+
+diameter,
+
+expiry_date,
+
+
+accessory_name,
+
+
+purchase_price || 0,
+
+selling_price || 0,
+
+quantity || 0
+
 
 ]
 
@@ -193,25 +377,37 @@ rack_location
 
 
 
+
+
 res.json({
 
 success:true,
+
+message:"Stock added successfully",
+
+barcode:finalBarcode,
 
 stock:result.rows[0]
 
 });
 
 
+
 }
 
+
 catch(error){
+
 
 console.log(error);
 
 
+
 res.status(500).json({
 
-success:false
+success:false,
+
+message:"Stock adding failed"
 
 });
 
@@ -219,9 +415,11 @@ success:false
 }
 
 
+
 });
 
 
 
 
-module.exports=router;
+
+module.exports = router;
