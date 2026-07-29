@@ -18,7 +18,7 @@ const PlaceOrders = require("./routes/orders.js");
 
 
 
-
+require("./cron/followupReminder");
 require("./corn/Subscriptiondeactivation");
 require("dotenv").config();
 
