@@ -1251,4 +1251,80 @@ message:"Rejection failed"
 }
 
 });
+router.post("/save-token",
+async(req,res)=>{
+
+
+const {
+storeCode,
+expoToken
+}=req.body;
+
+
+await pool.query(
+
+`
+INSERT INTO store_push_tokens
+(
+store_code,
+expo_token
+)
+
+VALUES
+($1,$2)
+
+`,
+[
+storeCode,
+expoToken
+]
+
+);
+
+
+res.json({
+success:true
+});
+
+
+});
+router.post("/save-web-token",
+async(req,res)=>{
+
+
+const {
+storeCode,
+subscription
+}=req.body;
+
+
+
+await pool.query(
+
+`
+INSERT INTO store_web_push_tokens
+(
+store_code,
+subscription
+)
+
+VALUES
+($1,$2)
+
+`,
+[
+storeCode,
+subscription
+]
+
+);
+
+
+
+res.json({
+success:true
+});
+
+
+});
 module.exports = router;
