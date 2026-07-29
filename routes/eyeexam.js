@@ -70,6 +70,7 @@ CREATE NEW EYE EXAM
 
 router.post("/add", async (req, res) => {
   try {
+
     const {
       storeCode,
 
@@ -106,153 +107,246 @@ router.post("/add", async (req, res) => {
       notes,
 
       next_review_date,
+
     } = req.body;
+
 
     if (!storeCode) {
       return res.status(400).json({
-        success: false,
-        message: "Store code missing",
+        success:false,
+        message:"Store code missing"
       });
     }
 
+
+
+    // 1. SAVE EYE EXAM
     const result = await pool.query(
-      `
-      INSERT INTO eye_exams
-      (
-        store_code,
 
-        patient_name,
-        patient_id,
-        mobile_number,
+`
+INSERT INTO eye_exams
+(
+store_code,
 
-        complaint,
-        history_notes,
+patient_name,
+patient_id,
+mobile_number,
 
-        od_vision,
-        od_ph,
+complaint,
+history_notes,
 
-        os_vision,
-        os_ph,
+od_vision,
+od_ph,
 
-        right_sph,
-        right_cyl,
-        right_axis,
+os_vision,
+os_ph,
 
-        left_sph,
-        left_cyl,
-        left_axis,
+right_sph,
+right_cyl,
+right_axis,
 
-        pd,
+left_sph,
+left_cyl,
+left_axis,
 
-        od_iop,
-        os_iop,
+pd,
 
-        diagnosis,
+od_iop,
+os_iop,
 
-        rx,
+diagnosis,
 
-        notes,
+rx,
 
-        next_review_date,
+notes,
 
-        exam_date
-      )
+next_review_date,
 
-      VALUES
-      (
-        $1,
+exam_date
+)
 
-        $2,
-        $3,
-        $4,
+VALUES
+(
+$1,
 
-        $5,
-        $6,
+$2,
+$3,
+$4,
 
-        $7,
-        $8,
+$5,
+$6,
 
-        $9,
-        $10,
+$7,
+$8,
 
-        $11,
-        $12,
-        $13,
+$9,
+$10,
 
-        $14,
-        $15,
-        $16,
+$11,
+$12,
+$13,
 
-        $17,
+$14,
+$15,
+$16,
 
-        $18,
-        $19,
+$17,
 
-        $20,
+$18,
+$19,
 
-        $21,
+$20,
 
-        $22,
+$21,
 
-        $23,
+$22,
 
-        NOW()
-      )
+$23,
 
-      RETURNING *
-      `,
-      [
-        storeCode,
+NOW()
+)
 
-        patient_name,
-        patient_id,
-        mobile_number,
+RETURNING *
 
-        complaint,
-        history_notes,
+`,
 
-        od_vision,
-        od_ph,
+[
 
-        os_vision,
-        os_ph,
+storeCode,
 
-        right_sph,
-        right_cyl,
-        right_axis,
+patient_name,
+patient_id,
+mobile_number,
 
-        left_sph,
-        left_cyl,
-        left_axis,
+complaint,
+history_notes,
 
-        pd,
+od_vision,
+od_ph,
 
-        od_iop,
-        os_iop,
+os_vision,
+os_ph,
 
-        diagnosis,
+right_sph,
+right_cyl,
+right_axis,
 
-        rx,
+left_sph,
+left_cyl,
+left_axis,
 
-        notes,
+pd,
 
-        next_review_date,
-      ]
-    );
+od_iop,
+os_iop,
+
+diagnosis,
+
+rx,
+
+notes,
+
+next_review_date
+
+]
+
+
+);
+
+
+
+    // 2. CREATE FOLLOW-UP NOTIFICATION
+    if(next_review_date){
+
+
+      await pool.query(
+
+`
+INSERT INTO notifications
+(
+store_code,
+
+patient_id,
+patient_name,
+mobile_number,
+
+title,
+message,
+
+notification_date
+)
+
+VALUES
+(
+$1,
+$2,
+$3,
+$4,
+$5,
+$6,
+$7
+)
+
+`,
+
+[
+
+storeCode,
+
+patient_id,
+
+patient_name,
+
+mobile_number,
+
+"Eye Follow-up Reminder",
+
+`${patient_name} has an eye review appointment. ${diagnosis || "Eye Checkup"}`,
+
+next_review_date
+
+]
+
+
+);
+
+
+    }
+
+
 
     res.json({
-      success: true,
-      message: "Eye examination saved successfully",
-      exam: result.rows[0],
+
+      success:true,
+
+      message:"Eye examination saved successfully",
+
+      exam:result.rows[0]
+
     });
-  } catch (error) {
-    console.log("SAVE EYE EXAM ERROR:", error);
+
+
+
+  }
+
+  catch(error){
+
+    console.log(
+      "SAVE EYE EXAM ERROR:",
+      error
+    );
+
 
     res.status(500).json({
-      success: false,
-      message: "Error saving eye exam",
+
+      success:false,
+
+      message:"Error saving eye exam"
+
     });
+
   }
+
 });
 
 
