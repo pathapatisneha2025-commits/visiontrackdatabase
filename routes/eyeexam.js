@@ -354,7 +354,86 @@ next_review_date
 
 
 
+/*
+GET PATIENT EYE EXAM HISTORY
+*/
 
+router.get("/patient/:patientId", async (req,res)=>{
+
+  try {
+
+    const {
+      patientId
+    } = req.params;
+
+    const {
+      storeCode
+    } = req.query;
+
+
+    if(!storeCode){
+      return res.status(400).json({
+        success:false,
+        message:"Store code required"
+      });
+    }
+
+
+    const result = await pool.query(
+      `
+      SELECT
+        e.*,
+        s.store_name
+
+      FROM eye_exams e
+
+      LEFT JOIN stores s
+      ON e.store_code = s.store_code
+
+      WHERE e.store_code = $1
+      AND e.patient_id = $2
+
+      ORDER BY e.id DESC
+
+      `,
+      [
+        storeCode,
+        patientId
+      ]
+    );
+
+
+    res.json({
+
+      success:true,
+
+      count:result.rows.length,
+
+      exams:result.rows
+
+    });
+
+
+  }
+  catch(error){
+
+    console.log(
+      "GET PATIENT EXAM HISTORY ERROR:",
+      error
+    );
+
+
+    res.status(500).json({
+
+      success:false,
+
+      message:"Server error"
+
+    });
+
+  }
+
+});
 /*
 GET SINGLE EXAM
 */
