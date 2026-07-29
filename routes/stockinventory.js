@@ -575,7 +575,91 @@ message:"Barcode scan failed"
 });
 
 
+/*
+GET STOCK BY BARCODE WITH STORE CHECK
+*/
 
+router.get("/barcode/:barcode", async(req,res)=>{
+
+try{
+
+const {
+    barcode
+}=req.params;
+
+
+const {
+    storeCode
+}=req.query;
+
+
+
+const result = await pool.query(
+
+`
+SELECT *
+
+FROM stock_inventory
+
+WHERE barcode=$1
+
+AND store_code=$2
+`,
+
+[
+    barcode,
+    storeCode
+]
+
+);
+
+
+
+if(result.rows.length === 0){
+
+return res.json({
+
+    success:false,
+
+    message:"Barcode not found"
+
+});
+
+}
+
+
+
+
+res.json({
+
+success:true,
+
+item:result.rows[0]
+
+});
+
+
+}
+
+
+catch(error){
+
+console.log("Barcode lookup error:",error);
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Failed to get inventory item"
+
+});
+
+
+}
+
+
+});
 
 
 
