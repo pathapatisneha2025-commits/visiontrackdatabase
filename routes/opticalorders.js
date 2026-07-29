@@ -110,7 +110,7 @@ CREATE NEW ORDER
 */
 
 
-router.post("/add",async(req,res)=>{
+router.post("/add", async(req,res)=>{
 
 
 try{
@@ -121,9 +121,7 @@ const {
 
 storeCode,
 
-
 order_no,
-
 
 order_date,
 
@@ -187,7 +185,9 @@ Number(advance_paid || 0);
 
 
 
-const result=await pool.query(
+// CREATE ORDER
+
+const result = await pool.query(
 
 `
 
@@ -319,20 +319,130 @@ payment_status || "Due"
 
 
 
+// ===============================
+// REDUCE FRAME STOCK
+// ===============================
+
+if(frame_barcode){
+
+
+const stockResult = await pool.query(
+
+`
+
+SELECT quantity
+
+FROM stock_inventory
+
+WHERE barcode=$1
+
+AND store_code=$2
+
+`,
+
+[
+frame_barcode,
+storeCode
+]
+
+);
+
+
+
+if(stockResult.rows.length > 0){
+
+
+const availableQty =
+Number(stockResult.rows[0].quantity);
+
+
+
+if(availableQty > 0){
+
+
+await pool.query(
+
+`
+
+UPDATE stock_inventory
+
+SET quantity = quantity - 1
+
+WHERE barcode=$1
+
+AND store_code=$2
+
+`,
+
+[
+frame_barcode,
+storeCode
+]
+
+);
+
+
+}
+
+else{
+
+
+console.log(
+"Stock already zero:",
+frame_barcode
+);
+
+
+}
+
+
+}
+
+}
+
+
+
+// ===============================
+// REDUCE LENS STOCK (OPTIONAL)
+// ===============================
+//
+// If you store lens barcode in future
+// uncomment this block
+//
+// if(lens_barcode){
+//
+// await pool.query(
+// `
+// UPDATE stock_inventory
+// SET quantity = quantity - 1
+// WHERE barcode=$1
+// AND store_code=$2
+// AND quantity > 0
+// `,
+// [
+// lens_barcode,
+// storeCode
+// ]
+// );
+//
+// }
+
+
+
+
 res.json({
 
 success:true,
 
-message:"Order created",
+message:"Order created and stock updated",
 
 order:result.rows[0]
-
 
 });
 
 
-
 }
+
 
 catch(error){
 
