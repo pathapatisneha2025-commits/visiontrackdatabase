@@ -2279,21 +2279,19 @@ GET /reports/stock/:storeCode
 */
 
 
-router.get("/stock/:storeCode",async(req,res)=>{
+router.get("/stock/:storeCode", async(req,res)=>{
 
 
 try{
 
 
 const {
-
 storeCode
-
 }=req.params;
 
 
 
-const result=await pool.query(
+const result = await pool.query(
 
 `
 
@@ -2314,19 +2312,39 @@ color,
 
 size,
 
+material,
+
+gender,
+
+lens_type,
+
+power_range,
+
+coating,
+
+lens_index,
+
+contact_type,
+
+power,
+
+base_curve,
+
+diameter,
+
+expiry_date,
+
+accessory_name,
+
 purchase_price,
 
 selling_price,
 
-supplier,
-
-quantity,
-
-rack_location
+quantity
 
 
 
-FROM optical_stock
+FROM stock_inventory
 
 
 
@@ -2362,14 +2380,21 @@ data:result.rows
 
 catch(error){
 
-console.log(error);
+
+console.log(
+"STOCK REPORT ERROR",
+error
+);
+
 
 
 res.status(500).json({
 
 success:false,
 
-message:"Stock report error"
+message:"Stock report error",
+
+error:error.message
 
 });
 
@@ -2414,13 +2439,35 @@ color,
 
 size,
 
+material,
+
+gender,
+
+lens_type,
+
+power_range,
+
+coating,
+
+lens_index,
+
+contact_type,
+
+power,
+
+base_curve,
+
+diameter,
+
+expiry_date,
+
+accessory_name,
+
 purchase_price,
 
 selling_price,
 
-quantity,
-
-rack_location
+quantity
 
 
 FROM stock_inventory
@@ -2453,6 +2500,7 @@ res.setHeader(
 
 
 
+
 const doc = new PDFDocument({
 margin:40
 });
@@ -2475,6 +2523,7 @@ align:"center"
 
 
 doc.moveDown();
+
 
 
 doc.fontSize(16)
@@ -2523,6 +2572,7 @@ doc.fontSize(12)
 
 
 
+
 doc.fontSize(10)
 .font("Helvetica")
 .text(
@@ -2537,13 +2587,35 @@ Color : ${item.color}
 
 Size : ${item.size}
 
+Material : ${item.material}
+
+Gender : ${item.gender}
+
+Lens Type : ${item.lens_type}
+
+Power Range : ${item.power_range}
+
+Coating : ${item.coating}
+
+Lens Index : ${item.lens_index}
+
+Contact Type : ${item.contact_type}
+
+Power : ${item.power}
+
+Base Curve : ${item.base_curve}
+
+Diameter : ${item.diameter}
+
+Expiry Date : ${item.expiry_date}
+
+Accessory : ${item.accessory_name}
+
 Purchase Price : ₹${item.purchase_price}
 
 Selling Price : ₹${item.selling_price}
 
 Quantity : ${item.quantity}
-
-Rack : ${item.rack_location}
 
 -------------------------------------
 
@@ -2563,7 +2635,9 @@ item.quantity || 0
 
 
 
+
 doc.moveDown();
+
 
 
 doc.fontSize(14)
@@ -2573,6 +2647,7 @@ doc.fontSize(14)
 `Total Stock Quantity : ${totalQuantity}`
 
 );
+
 
 
 
@@ -2588,6 +2663,7 @@ console.log(
 "STOCK PDF ERROR",
 error
 );
+
 
 
 res.status(500).json({
@@ -2642,19 +2718,39 @@ color,
 
 size,
 
+material,
+
+gender,
+
+lens_type,
+
+power_range,
+
+coating,
+
+lens_index,
+
+contact_type,
+
+power,
+
+base_curve,
+
+diameter,
+
+expiry_date,
+
+accessory_name,
+
 purchase_price,
 
 selling_price,
 
-supplier,
-
-quantity,
-
-rack_location
+quantity
 
 
 
-FROM optical_stock
+FROM stock_inventory
 
 
 
@@ -2675,7 +2771,6 @@ ORDER BY id DESC
 
 
 
-
 const workbook = new ExcelJS.Workbook();
 
 
@@ -2684,7 +2779,6 @@ const sheet =
 workbook.addWorksheet(
 "Stock Report"
 );
-
 
 
 
@@ -2735,6 +2829,90 @@ width:12
 
 
 {
+header:"Material",
+key:"material",
+width:15
+},
+
+
+{
+header:"Gender",
+key:"gender",
+width:15
+},
+
+
+{
+header:"Lens Type",
+key:"lens_type",
+width:18
+},
+
+
+{
+header:"Power Range",
+key:"power_range",
+width:18
+},
+
+
+{
+header:"Coating",
+key:"coating",
+width:18
+},
+
+
+{
+header:"Lens Index",
+key:"lens_index",
+width:15
+},
+
+
+{
+header:"Contact Type",
+key:"contact_type",
+width:18
+},
+
+
+{
+header:"Power",
+key:"power",
+width:12
+},
+
+
+{
+header:"Base Curve",
+key:"base_curve",
+width:15
+},
+
+
+{
+header:"Diameter",
+key:"diameter",
+width:15
+},
+
+
+{
+header:"Expiry Date",
+key:"expiry_date",
+width:18
+},
+
+
+{
+header:"Accessory Name",
+key:"accessory_name",
+width:20
+},
+
+
+{
 header:"Purchase Price",
 key:"purchase_price",
 width:18
@@ -2749,23 +2927,9 @@ width:18
 
 
 {
-header:"Supplier",
-key:"supplier",
-width:20
-},
-
-
-{
 header:"Quantity",
 key:"quantity",
 width:15
-},
-
-
-{
-header:"Rack Location",
-key:"rack_location",
-width:18
 }
 
 
