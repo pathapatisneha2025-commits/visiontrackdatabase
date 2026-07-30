@@ -2,16 +2,12 @@ const cron = require("node-cron");
 const db = require("../db");
 
 
-// Runs every day at 9 AM
-// TEST: "*/1 * * * *"
 cron.schedule("* * * * *", async()=>{
-
 
 try{
 
 
 console.log("Checking follow-up reminders...");
-
 
 
 const result = await db.query(`
@@ -29,64 +25,35 @@ status = 'pending'
 `);
 
 
-
-
 console.log(
-`Today's Follow-ups Found: ${result.rowCount}`
+"Today's Follow-ups:",
+result.rowCount
 );
 
+
+// ❌ Do not update sent here
+// Phone app will handle notification
 
 
 for(const item of result.rows){
 
-
 console.log(
-"Follow-up Patient:",
+"Pending Followup:",
 item.patient_name
 );
 
 
-// Here we will add:
-// 1. Android push notification
-// 2. Web push notification
-
-
-
-await db.query(
-
-`
-
-UPDATE notifications
-
-SET 
-status = 'sent'
-
-WHERE id=$1
-
-`,
-
-[
-item.id
-]
-
-);
-
-
-
 }
-
 
 
 }
 catch(error){
 
 console.log(
-"Follow-up Reminder Cron Error:",
+"Follow-up Cron Error:",
 error
 );
 
-
 }
-
 
 });
