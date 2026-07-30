@@ -3667,9 +3667,6 @@ left_cyl,
 left_axis,
 
 
-add_power,
-
-
 pd,
 
 
