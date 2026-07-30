@@ -1,13 +1,21 @@
 const cron = require("node-cron");
 const db = require("../db");
 
+const sendPushNotification =
+require("../utils/sendPushNotification");
+
+
 
 cron.schedule("* * * * *", async()=>{
+
 
 try{
 
 
-console.log("Checking follow-up reminders...");
+console.log(
+"Checking today's followups..."
+);
+
 
 
 const result = await db.query(`
@@ -16,44 +24,122 @@ SELECT *
 
 FROM notifications
 
-WHERE 
-notification_date = CURRENT_DATE
+WHERE
+
+notification_date::date = CURRENT_DATE
 
 AND
-status = 'pending'
+
+status='pending'
 
 `);
 
 
+
+
 console.log(
-"Today's Follow-ups:",
+"FOLLOWUPS FOUND:",
 result.rowCount
 );
 
 
-// ❌ Do not update sent here
-// Phone app will handle notification
-
 
 for(const item of result.rows){
 
-console.log(
-"Pending Followup:",
-item.patient_name
+
+
+// get store token
+
+const tokenResult =
+await db.query(
+
+`
+
+SELECT expo_token
+
+FROM store_push_tokens
+
+WHERE store_code=$1
+
+`,
+
+[
+item.store_code
+]
+
+);
+
+
+
+for(const tokenRow of tokenResult.rows){
+
+
+
+await sendPushNotification(
+
+tokenRow.expo_token,
+
+
+item.title,
+
+
+`${item.patient_name} - ${item.message}`,
+
+{
+notificationId:item.id,
+patientId:item.patient_id
+}
+
 );
 
 
 }
+
+
+
+// update status
+
+await db.query(
+
+`
+
+UPDATE notifications
+
+SET status='sent'
+
+WHERE id=$1
+
+`,
+
+[
+item.id
+]
+
+);
+
+
+
+console.log(
+"Notification completed:",
+item.patient_name
+);
+
+
+
+}
+
 
 
 }
 catch(error){
 
 console.log(
-"Follow-up Cron Error:",
+"CRON ERROR:",
 error
 );
 
+
 }
+
 
 });
