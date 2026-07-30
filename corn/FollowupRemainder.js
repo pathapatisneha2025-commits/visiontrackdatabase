@@ -4,7 +4,7 @@ const db = require("../db");
 
 // Runs every day at 9 AM
 // TEST: "*/1 * * * *"
-cron.schedule("0 9 * * *", async()=>{
+cron.schedule("* * * * *", async()=>{
 
 
 try{
