@@ -2393,10 +2393,7 @@ router.get("/stock/:storeCode/pdf", async(req,res)=>{
 try{
 
 
-const {
-storeCode
-}=req.params;
-
+const { storeCode } = req.params;
 
 
 const result = await pool.query(
@@ -2404,7 +2401,6 @@ const result = await pool.query(
 `
 
 SELECT
-
 
 barcode,
 
@@ -2422,32 +2418,24 @@ purchase_price,
 
 selling_price,
 
-supplier,
-
 quantity,
 
 rack_location
 
 
-
 FROM stock_inventory
-
 
 
 WHERE store_code=$1
 
 
-
 ORDER BY id DESC
-
 
 `,
 
 [storeCode]
 
-
 );
-
 
 
 
@@ -2465,16 +2453,12 @@ res.setHeader(
 
 
 
-
-
 const doc = new PDFDocument({
 margin:40
 });
 
 
-
 doc.pipe(res);
-
 
 
 
@@ -2491,7 +2475,6 @@ align:"center"
 
 
 doc.moveDown();
-
 
 
 doc.fontSize(16)
@@ -2519,7 +2502,7 @@ doc.moveDown();
 
 
 
-let totalQuantity=0;
+let totalQuantity = 0;
 
 
 
@@ -2558,8 +2541,6 @@ Purchase Price : ₹${item.purchase_price}
 
 Selling Price : ₹${item.selling_price}
 
-Supplier : ${item.supplier}
-
 Quantity : ${item.quantity}
 
 Rack : ${item.rack_location}
@@ -2577,15 +2558,12 @@ item.quantity || 0
 );
 
 
-
 });
 
 
 
 
-
 doc.moveDown();
-
 
 
 doc.fontSize(14)
@@ -2598,14 +2576,10 @@ doc.fontSize(14)
 
 
 
-
-
 doc.end();
 
 
-
 }
-
 
 catch(error){
 
@@ -2614,7 +2588,6 @@ console.log(
 "STOCK PDF ERROR",
 error
 );
-
 
 
 res.status(500).json({
@@ -2632,7 +2605,6 @@ error:error.message
 
 
 });
-
 /*
 ================================================
 STOCK REPORT EXCEL
