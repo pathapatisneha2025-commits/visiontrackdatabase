@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const db = require("../db");
 
 const sendPushNotification =
-require("../utils/sendNotification");
+require("../utils/sendNotifcation");
 
 
 
