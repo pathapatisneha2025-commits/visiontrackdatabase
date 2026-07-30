@@ -2430,7 +2430,7 @@ rack_location
 
 
 
-FROM optical_stock
+FROM stock_inventory
 
 
 
