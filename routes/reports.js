@@ -3728,7 +3728,30 @@ patient_name ILIKE '%'||$4||'%'
 
 
 ORDER BY exam_date DESC
+WHERE store_code=$1
 
+AND
+(
+$2=''
+OR
+exam_date >= TO_DATE($2,'DD-MM-YYYY')
+)
+
+AND
+(
+$3=''
+OR
+exam_date <= TO_DATE($3,'DD-MMYYYY')
+)
+
+AND
+(
+$4=''
+OR
+patient_id ILIKE '%'||$4||'%'
+)
+
+ORDER BY exam_date DESC
 
 
 `,
@@ -3860,7 +3883,7 @@ AND
 (
 $4=''
 OR
-patient_name ILIKE '%'||$4||'%'
+patient_id ILIKE '%'||$4||'%'
 )
 
 
