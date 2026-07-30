@@ -599,7 +599,66 @@ message:"Failed to fetch store details"
 
 });
 
+router.get("/notifications/:storeCode", async(req,res)=>{
 
+try{
+
+const {
+storeCode
+}=req.params;
+
+
+const result = await pool.query(
+`
+SELECT
+id,
+store_code,
+patient_id,
+patient_name,
+mobile_number,
+title,
+message,
+notification_date
+
+FROM notifications
+
+WHERE store_code=$1
+
+ORDER BY notification_date ASC
+
+`,
+[
+storeCode
+]
+);
+
+
+
+res.json({
+
+success:true,
+
+notifications:result.rows
+
+});
+
+
+}
+catch(error){
+
+console.log(error);
+
+res.status(500).json({
+
+success:false,
+
+message:error.message
+
+});
+
+}
+
+});
 // ======================================
 // GET PAYMENT HISTORY BY STORE CODE
 // ======================================
