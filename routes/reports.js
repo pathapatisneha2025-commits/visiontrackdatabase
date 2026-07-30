@@ -3800,16 +3800,12 @@ router.post("/eye-exam/pdf", async(req,res)=>{
 
 try{
 
-
 const {
-
 storeCode,
 fromDate,
 toDate,
 customer
-
 }=req.body;
-
 
 
 const result = await pool.query(
@@ -3833,8 +3829,6 @@ left_sph,
 left_cyl,
 
 left_axis,
-
-add_power,
 
 pd,
 
@@ -3879,14 +3873,11 @@ ORDER BY exam_date DESC
 `,
 
 [
-
 storeCode,
 fromDate || "",
 toDate || "",
 customer || ""
-
 ]
-
 
 );
 
@@ -3923,7 +3914,9 @@ align:"center"
 );
 
 
+
 doc.moveDown();
+
 
 
 doc.fontSize(16)
@@ -3935,7 +3928,9 @@ align:"center"
 );
 
 
+
 doc.moveDown();
+
 
 
 doc.fontSize(10)
@@ -3967,26 +3962,36 @@ Patient ID : ${item.patient_id || ""}
 
 Exam Date : ${item.exam_date}
 
+
 Right Eye
+
 SPH : ${item.right_sph}
+
 CYL : ${item.right_cyl}
+
 AXIS : ${item.right_axis}
 
 
+
 Left Eye
+
 SPH : ${item.left_sph}
+
 CYL : ${item.left_cyl}
+
 AXIS : ${item.left_axis}
 
 
-Add Power : ${item.add_power}
 
 PD : ${item.pd}
+
 
 Notes : ${item.notes}
 
 
+
 ----------------------------------------
+
 `
 
 );
@@ -4004,7 +4009,6 @@ doc.end();
 
 
 catch(error){
-
 
 console.log(error);
 
@@ -4024,7 +4028,6 @@ error:error.message
 
 
 });
-
 
 
 
