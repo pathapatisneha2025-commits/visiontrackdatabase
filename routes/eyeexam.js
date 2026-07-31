@@ -477,7 +477,54 @@ router.get("/:id", async (req, res) => {
 });
 
 
+router.put("/update-review/:patientId", async(req,res)=>{
 
+try{
+
+const {
+storeCode,
+next_review_date,
+notes
+}=req.body;
+
+
+const result = await db.query(
+`
+UPDATE eye_exams
+SET 
+next_review_date=$1,
+notes=$2
+WHERE patient_id=$3
+AND store_code=$4
+RETURNING *
+`,
+[
+next_review_date,
+notes,
+req.params.patientId,
+storeCode
+]
+);
+
+
+res.json({
+success:true,
+exam:result.rows[0]
+});
+
+
+}catch(error){
+
+console.log(error);
+
+res.status(500).json({
+success:false,
+message:"Update failed"
+});
+
+}
+
+});
 
 
 module.exports = router;
