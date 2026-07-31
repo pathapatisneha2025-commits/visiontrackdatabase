@@ -614,7 +614,53 @@ message:"Error fetching order"
 
 
 
+router.put("/payment/:id", async(req,res)=>{
 
+try{
+
+const {id}=req.params;
+
+const {
+advance_paid,
+payment_status
+}=req.body;
+
+
+await db.query(
+`
+UPDATE optical_orders
+SET 
+advance_paid=$1,
+payment_status=$2
+WHERE id=$3
+`,
+[
+advance_paid,
+payment_status,
+id
+]
+);
+
+
+res.json({
+success:true
+});
+
+
+}
+catch(err){
+
+console.log(err);
+
+res.status(500).json({
+success:false,
+message:"Payment update failed"
+});
+
+
+}
+
+});
 
 
 
