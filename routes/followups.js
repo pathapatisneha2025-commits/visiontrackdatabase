@@ -174,7 +174,7 @@ try{
 const {id,storeCode}=req.body;
 
 
-await db.query(
+await pool.query(
 `
 UPDATE followups
 SET status='completed'
