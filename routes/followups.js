@@ -167,6 +167,42 @@ success:false
 
 
 });
+router.put("/complete", async(req,res)=>{
+
+try{
+
+const {id,storeCode}=req.body;
+
+
+await db.query(
+`
+UPDATE followups
+SET status='completed'
+WHERE id=$1
+AND store_code=$2
+`,
+[id,storeCode]
+);
+
+
+res.json({
+success:true
+});
+
+
+}
+catch(error){
+
+console.log(error);
+
+res.status(500).json({
+success:false
+});
+
+}
+
+
+});
 
 
 module.exports=router;
