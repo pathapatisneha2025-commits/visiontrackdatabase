@@ -488,7 +488,7 @@ notes
 }=req.body;
 
 
-const result = await db.query(
+const result = await pool.query(
 `
 UPDATE eye_exams
 SET 
