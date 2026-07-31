@@ -626,7 +626,7 @@ payment_status
 }=req.body;
 
 
-await db.query(
+await pool.query(
 `
 UPDATE optical_orders
 SET 
