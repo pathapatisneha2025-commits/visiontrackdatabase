@@ -530,7 +530,8 @@ store_code,
 owner_name,
 mobile,
 email,
-subscription_status
+subscription_status,
+expiry_date
 
 FROM stores
 
