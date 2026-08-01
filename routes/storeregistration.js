@@ -288,7 +288,22 @@ message:"Email not registered"
 const store = result.rows[0];
 
 
+// CHECK PENDING ACCOUNT
 
+if(store.subscription_status==="PENDING"){
+
+return res.status(403).json({
+
+success:false,
+
+accountPending:true,
+
+message:
+"Your account is pending approval. Please wait for admin activation."
+
+});
+
+}
 
 // CHECK IF ADMIN DEACTIVATED ACCOUNT
 
