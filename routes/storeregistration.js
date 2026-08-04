@@ -410,15 +410,11 @@ message:"Failed to fetch stores"
 
 router.get("/store-details/:storeCode", async(req,res)=>{
 
-try{
-
+try {
 
 const {storeCode}=req.params;
 
-
-
 const result = await pool.query(
-
 `
 SELECT
 
@@ -428,6 +424,7 @@ store_code,
 owner_name,
 mobile,
 email,
+address,
 subscription_status,
 expiry_date
 
@@ -436,15 +433,10 @@ FROM stores
 WHERE store_code=$1
 
 `,
-
 [
 storeCode
 ]
-
 );
-
-
-
 
 
 if(result.rows.length===0){
@@ -460,9 +452,6 @@ message:"Store not found"
 }
 
 
-
-
-
 res.json({
 
 success:true,
@@ -472,16 +461,13 @@ data:result.rows[0]
 });
 
 
-
 }
 catch(error){
-
 
 console.log(
 "Store Details Error:",
 error
 );
-
 
 
 res.status(500).json({
@@ -492,9 +478,7 @@ message:"Failed to fetch store details"
 
 });
 
-
 }
-
 
 });
 
