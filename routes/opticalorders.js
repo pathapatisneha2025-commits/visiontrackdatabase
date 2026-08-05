@@ -613,55 +613,76 @@ message:"Error fetching order"
 });
 
 
+router.put("/payment/:id", async (req, res) => {
 
-router.put("/payment/:id", async(req,res)=>{
+  try {
 
-try{
+    const { id } = req.params;
 
-const {id}=req.params;
-
-const {
-advance_paid,
-payment_status
-}=req.body;
-
-
-await pool.query(
-`
-UPDATE optical_orders
-SET 
-advance_paid=$1,
-payment_status=$2
-WHERE id=$3
-`,
-[
-advance_paid,
-payment_status,
-id
-]
-);
+    const {
+      advance_paid,
+      payment_status
+    } = req.body;
 
 
-res.json({
-success:true
+    // Get order total amount
+    const orderResult = await pool.query(
+      `
+      SELECT total_amount 
+      FROM optical_orders
+      WHERE id=$1
+      `,
+      [id]
+    );
+
+
+    const totalAmount = Number(orderResult.rows[0]?.total_amount || 0);
+
+    const paidAmount = Number(advance_paid || 0);
+
+
+    const status =
+      paidAmount >= totalAmount
+        ? "Completed"
+        : "Pending";
+
+
+    await pool.query(
+      `
+      UPDATE optical_orders
+      SET 
+        advance_paid = $1,
+        payment_status = $2,
+        status = $3
+      WHERE id = $4
+      `,
+      [
+        advance_paid,
+        payment_status,
+        status,
+        id
+      ]
+    );
+
+
+    res.json({
+      success: true,
+      status
+    });
+
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      success: false,
+      message: "Payment update failed"
+    });
+
+  }
+
 });
-
-
-}
-catch(err){
-
-console.log(err);
-
-res.status(500).json({
-success:false,
-message:"Payment update failed"
-});
-
-
-}
-
-});
-
 
 
 
