@@ -112,14 +112,13 @@ CREATE NEW ORDER
 
 router.post("/add", async(req,res)=>{
 
-
 try{
-
 
 const {
 
-
 storeCode,
+
+bill_number,
 
 order_no,
 
@@ -197,6 +196,8 @@ INSERT INTO optical_orders
 
 store_code,
 
+bill_number,
+
 order_no,
 
 order_date,
@@ -244,19 +245,19 @@ VALUES
 
 (
 
-$1,$2,$3,$4,
+$1,$2,$3,$4,$5,
 
-$5,$6,$7,$8,$9,
+$6,$7,$8,$9,$10,
 
-$10,$11,
-
-$12,
+$11,$12,
 
 $13,
 
-$14,$15,$16,
+$14,
 
-$17,$18
+$15,$16,$17,
+
+$18,$19
 
 )
 
@@ -269,6 +270,8 @@ RETURNING *
 
 
 storeCode,
+
+bill_number || null,
 
 order_no,
 
@@ -315,6 +318,7 @@ payment_status || "Due"
 ]
 
 );
+
 
 
 
@@ -402,12 +406,11 @@ frame_barcode
 
 
 
+
+
 // ===============================
 // REDUCE LENS STOCK (OPTIONAL)
 // ===============================
-//
-// If you store lens barcode in future
-// uncomment this block
 //
 // if(lens_barcode){
 //
@@ -426,6 +429,7 @@ frame_barcode
 // );
 //
 // }
+
 
 
 
@@ -465,7 +469,6 @@ error:error.message
 
 
 });
-
 
 
 
