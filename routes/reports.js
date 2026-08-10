@@ -894,131 +894,85 @@ POST /reports/customer
 */
 
 
-router.post("/customer",async(req,res)=>{
+router.post("/customer", async (req, res) => {
+  try {
+    const {
+      storeCode,
+      customer,
+      patientId,
+      age,
+    } = req.body;
 
+    const result = await pool.query(
+      `
+      SELECT
+        patient_id,
+        patient_name,
+        age,
+        mobile,
 
-try{
+        COUNT(*) AS total_orders,
 
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_purchase,
 
-const {
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending_amount
 
-storeCode,
+      FROM optical_orders
 
-customer
+      WHERE store_code = $1
 
-}=req.body;
+      AND (
+        $2 = ''
+        OR patient_name ILIKE '%' || $2 || '%'
+      )
 
+      AND (
+        $3 = ''
+        OR patient_id::TEXT ILIKE '%' || $3 || '%'
+      )
 
+      AND (
+        $4 = ''
+        OR age::TEXT = $4
+      )
 
-const result=await pool.query(
+      GROUP BY
+        patient_id,
+        patient_name,
+        age,
+        mobile
 
-`
+      ORDER BY
+        total_purchase DESC
+      `,
+      [
+        storeCode,
+        customer || "",
+        patientId || "",
+        age || "",
+      ]
+    );
 
-SELECT
+    res.json({
+      success: true,
+      data: result.rows,
+    });
 
+  } catch (error) {
+    console.log("CUSTOMER REPORT ERROR:", error);
 
-patient_name,
-
-
-mobile,
-
-
-COUNT(*) AS total_orders,
-
-
-COALESCE(
-SUM(total_amount),
-0
-) AS total_purchase,
-
-
-COALESCE(
-SUM(balance_amount),
-0
-) AS pending_amount
-
-
-
-FROM optical_orders
-
-
-
-WHERE store_code=$1
-
-
-
-AND
-
-(
-
-$2=''
-
-OR
-
-patient_name ILIKE '%'||$2||'%'
-
-)
-
-
-
-GROUP BY
-
-patient_name,
-
-mobile
-
-
-
-ORDER BY total_purchase DESC
-
-
-
-`,
-
-[
-
-storeCode,
-
-customer || ""
-
-]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-data:result.rows
-
+    res.status(500).json({
+      success: false,
+      message: "Customer report error",
+    });
+  }
 });
-
-
-}
-
-
-catch(error){
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Customer report error"
-
-});
-
-
-}
-
-
-});
-
 
 
 
@@ -1031,285 +985,274 @@ POST /reports/customer/pdf
 ================================================
 */
 
-router.post("/customer/pdf", async(req,res)=>{
-
-try{
-
-
-const {
-
-storeCode,
-
-customer
-
-}=req.body;
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-patient_name,
-
-
-mobile,
-
-
-COUNT(*) AS total_orders,
-
-
-COALESCE(
-SUM(total_amount),
-0
-) AS total_purchase,
-
-
-COALESCE(
-SUM(balance_amount),
-0
-) AS pending_amount
-
-
-
-FROM optical_orders
-
-
-
-WHERE store_code=$1
-
-
-
-AND
-
-(
-
-$2=''
-
-OR
-
-patient_name ILIKE '%'||$2||'%'
-
-)
-
-
-
-GROUP BY
-
-patient_name,
-
-mobile
-
-
-
-ORDER BY total_purchase DESC
-
-
-
-`,
-
-[
-
-storeCode,
-
-customer || ""
-
-]
-
-
-);
-
-
-
-
-
-res.setHeader(
-"Content-Type",
-"application/pdf"
-);
-
-
-res.setHeader(
-"Content-Disposition",
-"attachment; filename=customer-report.pdf"
-);
-
-
-
-
-const doc = new PDFDocument({
-margin:40
-});
-
-
-doc.pipe(res);
-
-
-
-
-
-doc.fontSize(20)
-.font("Helvetica-Bold")
-.text(
-"VISION EYE CARE",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(16)
-.text(
-"Customer Report",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown(2);
-
-
-
-doc.fontSize(11)
-.text(
-`Store Code : ${storeCode}`
-);
-
-
-
-doc.moveDown();
-
-
-
-let totalPurchase=0;
-
-let pendingTotal=0;
-
-
-
-
-
-result.rows.forEach((item,index)=>{
-
-
-doc.moveDown();
-
-
-doc.fontSize(12)
-.font("Helvetica-Bold")
-.text(
-`${index+1}. ${item.patient_name}`
-);
-
-
-
-doc.fontSize(10)
-.font("Helvetica")
-.text(
-
-`
-
-Mobile : ${item.mobile}
-
-Total Orders : ${item.total_orders}
-
-Total Purchase : ₹${item.total_purchase}
-
-Pending Amount : ₹${item.pending_amount}
-
-------------------------------------
-
-`
-
-);
-
-
-
-totalPurchase += Number(
-item.total_purchase || 0
-);
-
-
-pendingTotal += Number(
-item.pending_amount || 0
-);
-
-
-});
-
-
-
-
-
-doc.moveDown();
-
-
-doc.fontSize(14)
-.font("Helvetica-Bold")
-.text(
-"Summary"
-);
-
-
-
-doc.fontSize(11)
-.font("Helvetica")
-.text(
-
-`
-
-Total Purchase : ₹${totalPurchase}
-
-Total Pending : ₹${pendingTotal}
-
-`
-
-);
-
-
-
-
-doc.end();
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"CUSTOMER PDF ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Customer PDF generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
+router.post("/customer/pdf", async (req, res) => {
+  try {
+    const {
+      storeCode,
+      customer,
+      patientId,
+      age,
+    } = req.body;
+
+    const result = await pool.query(
+      `
+      SELECT
+        patient_id,
+        patient_name,
+        age,
+        mobile,
+
+        COUNT(*) AS total_orders,
+
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_purchase,
+
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending_amount
+
+      FROM optical_orders
+
+      WHERE store_code = $1
+
+      AND (
+        $2 = ''
+        OR patient_name ILIKE '%' || $2 || '%'
+      )
+
+      AND (
+        $3 = ''
+        OR patient_id::TEXT ILIKE '%' || $3 || '%'
+      )
+
+      AND (
+        $4 = ''
+        OR age::TEXT = $4
+      )
+
+      GROUP BY
+        patient_id,
+        patient_name,
+        age,
+        mobile
+
+      ORDER BY
+        total_purchase DESC
+      `,
+      [
+        storeCode,
+        customer || "",
+        patientId || "",
+        age || "",
+      ]
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/pdf"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=customer-report.pdf"
+    );
+
+    const doc = new PDFDocument({
+      margin: 40,
+    });
+
+    doc.pipe(res);
+
+    // =========================
+    // HEADER
+    // =========================
+
+    doc
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text(
+        "VISION EYE CARE",
+        {
+          align: "center",
+        }
+      );
+
+    doc.moveDown();
+
+    doc
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .text(
+        "Customer Report",
+        {
+          align: "center",
+        }
+      );
+
+    doc.moveDown(2);
+
+    // =========================
+    // REPORT DETAILS
+    // =========================
+
+    doc
+      .fontSize(11)
+      .font("Helvetica")
+      .text(`Store Code : ${storeCode}`);
+
+    if (customer) {
+      doc.text(`Customer : ${customer}`);
+    }
+
+    if (patientId) {
+      doc.text(`Patient ID : ${patientId}`);
+    }
+
+    if (age) {
+      doc.text(`Age : ${age}`);
+    }
+
+    doc.moveDown();
+
+    // =========================
+    // TOTALS
+    // =========================
+
+    let totalPurchase = 0;
+    let pendingTotal = 0;
+
+    // =========================
+    // CUSTOMER DATA
+    // =========================
+
+    result.rows.forEach((item, index) => {
+
+      // Avoid content going outside page
+      if (doc.y > 700) {
+        doc.addPage();
+      }
+
+      doc.moveDown();
+
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text(
+          `${index + 1}. ${item.patient_name || "-"}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Patient ID : ${item.patient_id || "-"}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Age : ${item.age || "-"}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Mobile : ${item.mobile || "-"}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Total Orders : ${item.total_orders || 0}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Total Purchase : ₹${Number(
+            item.total_purchase || 0
+          ).toFixed(2)}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Pending Amount : ₹${Number(
+            item.pending_amount || 0
+          ).toFixed(2)}`
+        );
+
+      doc.moveDown();
+
+      doc
+        .moveTo(40, doc.y)
+        .lineTo(555, doc.y)
+        .stroke();
+
+      totalPurchase += Number(
+        item.total_purchase || 0
+      );
+
+      pendingTotal += Number(
+        item.pending_amount || 0
+      );
+    });
+
+    // =========================
+    // SUMMARY
+    // =========================
+
+    if (doc.y > 680) {
+      doc.addPage();
+    }
+
+    doc.moveDown(2);
+
+    doc
+      .fontSize(14)
+      .font("Helvetica-Bold")
+      .text("Summary");
+
+    doc.moveDown();
+
+    doc
+      .fontSize(11)
+      .font("Helvetica")
+      .text(
+        `Total Customers : ${result.rows.length}`
+      );
+
+    doc.text(
+      `Total Purchase : ₹${totalPurchase.toFixed(2)}`
+    );
+
+    doc.text(
+      `Total Pending : ₹${pendingTotal.toFixed(2)}`
+    );
+
+    doc.end();
+
+  } catch (error) {
+
+    console.log(
+      "CUSTOMER PDF ERROR",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Customer PDF generation failed",
+      error: error.message,
+    });
+  }
 });
 
 /*
@@ -1319,275 +1262,276 @@ POST /reports/customer/excel
 ================================================
 */
 
-router.post("/customer/excel", async(req,res)=>{
-
-try{
-
-
-const {
-
-storeCode,
-
-customer
-
-}=req.body;
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-patient_name,
-
-
-mobile,
-
-
-COUNT(*) AS total_orders,
-
-
-COALESCE(
-SUM(total_amount),
-0
-) AS total_purchase,
-
-
-COALESCE(
-SUM(balance_amount),
-0
-) AS pending_amount
-
-
-
-FROM optical_orders
-
-
-
-WHERE store_code=$1
-
-
-
-AND
-
-(
-
-$2=''
-
-OR
-
-patient_name ILIKE '%'||$2||'%'
-
-)
-
-
-
-GROUP BY
-
-patient_name,
-
-mobile
-
-
-
-ORDER BY total_purchase DESC
-
-
-
-`,
-
-[
-
-storeCode,
-
-customer || ""
-
-]
-
-
-);
-
-
-
-
-
-const workbook = new ExcelJS.Workbook();
-
-
-
-const sheet =
-workbook.addWorksheet(
-"Customer Report"
-);
-
-
-
-
-
-sheet.columns=[
-
-
-{
-header:"Customer Name",
-key:"patient_name",
-width:25
-},
-
-
-{
-header:"Mobile",
-key:"mobile",
-width:15
-},
-
-
-{
-header:"Total Orders",
-key:"total_orders",
-width:15
-},
-
-
-{
-header:"Total Purchase",
-key:"total_purchase",
-width:18
-},
-
-
-{
-header:"Pending Amount",
-key:"pending_amount",
-width:18
-}
-
-
-
-];
-
-
-
-
-
-let totalPurchase=0;
-
-let totalPending=0;
-
-
-
-result.rows.forEach(row=>{
-
-
-sheet.addRow({
-
-patient_name:row.patient_name,
-
-mobile:row.mobile,
-
-total_orders:row.total_orders,
-
-total_purchase:Number(row.total_purchase),
-
-pending_amount:Number(row.pending_amount)
-
+router.post("/customer/excel", async (req, res) => {
+  try {
+    const {
+      storeCode,
+      customer,
+      patientId,
+      age,
+    } = req.body;
+
+    const result = await pool.query(
+      `
+      SELECT
+        patient_id,
+        patient_name,
+        age,
+        mobile,
+
+        COUNT(*) AS total_orders,
+
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_purchase,
+
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending_amount
+
+      FROM optical_orders
+
+      WHERE store_code = $1
+
+      AND (
+        $2 = ''
+        OR patient_name ILIKE '%' || $2 || '%'
+      )
+
+      AND (
+        $3 = ''
+        OR patient_id::TEXT ILIKE '%' || $3 || '%'
+      )
+
+      AND (
+        $4 = ''
+        OR age::TEXT = $4
+      )
+
+      GROUP BY
+        patient_id,
+        patient_name,
+        age,
+        mobile
+
+      ORDER BY
+        total_purchase DESC
+      `,
+      [
+        storeCode,
+        customer || "",
+        patientId || "",
+        age || "",
+      ]
+    );
+
+    // =========================
+    // CREATE EXCEL WORKBOOK
+    // =========================
+
+    const workbook = new ExcelJS.Workbook();
+
+    const sheet = workbook.addWorksheet(
+      "Customer Report"
+    );
+
+    // =========================
+    // COLUMNS
+    // =========================
+
+    sheet.columns = [
+      {
+        header: "Patient ID",
+        key: "patient_id",
+        width: 18,
+      },
+
+      {
+        header: "Customer Name",
+        key: "patient_name",
+        width: 25,
+      },
+
+      {
+        header: "Age",
+        key: "age",
+        width: 10,
+      },
+
+      {
+        header: "Mobile",
+        key: "mobile",
+        width: 15,
+      },
+
+      {
+        header: "Total Orders",
+        key: "total_orders",
+        width: 15,
+      },
+
+      {
+        header: "Total Purchase",
+        key: "total_purchase",
+        width: 18,
+      },
+
+      {
+        header: "Pending Amount",
+        key: "pending_amount",
+        width: 18,
+      },
+    ];
+
+    // =========================
+    // HEADER STYLE
+    // =========================
+
+    sheet.getRow(1).font = {
+      bold: true,
+    };
+
+    sheet.getRow(1).alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+
+    // =========================
+    // TOTALS
+    // =========================
+
+    let totalPurchase = 0;
+    let totalPending = 0;
+
+    // =========================
+    // ADD CUSTOMER DATA
+    // =========================
+
+    result.rows.forEach((row) => {
+
+      sheet.addRow({
+        patient_id: row.patient_id,
+        patient_name: row.patient_name,
+        age: row.age,
+        mobile: row.mobile,
+        total_orders: Number(
+          row.total_orders || 0
+        ),
+        total_purchase: Number(
+          row.total_purchase || 0
+        ),
+        pending_amount: Number(
+          row.pending_amount || 0
+        ),
+      });
+
+      totalPurchase += Number(
+        row.total_purchase || 0
+      );
+
+      totalPending += Number(
+        row.pending_amount || 0
+      );
+    });
+
+    // =========================
+    // CURRENCY FORMAT
+    // =========================
+
+    sheet.eachRow((row, rowNumber) => {
+
+      if (rowNumber > 1) {
+
+        row.getCell(6).numFmt =
+          '₹#,##0.00';
+
+        row.getCell(7).numFmt =
+          '₹#,##0.00';
+      }
+    });
+
+    // =========================
+    // TOTAL ROW
+    // =========================
+
+    sheet.addRow({});
+
+    const totalRow = sheet.addRow({
+      patient_name: "TOTAL",
+      total_purchase: totalPurchase,
+      pending_amount: totalPending,
+    });
+
+    totalRow.font = {
+      bold: true,
+    };
+
+    totalRow.getCell(6).numFmt =
+      '₹#,##0.00';
+
+    totalRow.getCell(7).numFmt =
+      '₹#,##0.00';
+
+    // =========================
+    // REPORT FILTER DETAILS
+    // =========================
+
+    sheet.insertRows(1, [
+      [],
+      ["Store Code", storeCode],
+      ["Customer", customer || "All"],
+      ["Patient ID", patientId || "All"],
+      ["Age", age || "All"],
+      [],
+    ]);
+
+    // Re-style actual column header row
+    const headerRow = sheet.getRow(7);
+
+    headerRow.font = {
+      bold: true,
+    };
+
+    headerRow.alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+
+    // =========================
+    // RESPONSE
+    // =========================
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=customer-report.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+
+    res.end();
+
+  } catch (error) {
+
+    console.log(
+      "CUSTOMER EXCEL ERROR",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Customer Excel generation failed",
+      error: error.message,
+    });
+  }
 });
-
-
-
-totalPurchase += Number(
-row.total_purchase || 0
-);
-
-
-totalPending += Number(
-row.pending_amount || 0
-);
-
-
-});
-
-
-
-
-
-sheet.addRow({});
-
-
-sheet.addRow({
-
-patient_name:"TOTAL",
-
-total_purchase:totalPurchase,
-
-pending_amount:totalPending
-
-});
-
-
-
-
-
-res.setHeader(
-
-"Content-Type",
-
-"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-);
-
-
-
-res.setHeader(
-
-"Content-Disposition",
-
-"attachment; filename=customer-report.xlsx"
-
-);
-
-
-
-
-
-await workbook.xlsx.write(res);
-
-
-res.end();
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"CUSTOMER EXCEL ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Customer Excel generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
-});
-
 
 /*
 ================================================
