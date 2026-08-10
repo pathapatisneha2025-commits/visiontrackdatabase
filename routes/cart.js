@@ -11,155 +11,114 @@ const pool = require("../db");
 // ADD TO CART
 // ===============================
 
-router.post("/add", async(req,res)=>{
+router.post("/add", async (req, res) => {
+  try {
+    const {
+      store_code,
+      product_id,
+      product_name,
+      brand,
+      category,
+      image,
+      price,
+      color,
+      sku,
+      quantity
+    } = req.body;
 
+    // Make sure quantity is always at least 1
+    const qty = Math.max(1, Number(quantity) || 1);
 
-try{
+    const selectedColor = color || "";
 
+    // Check same product + same color
+    const check = await pool.query(
+      `
+      SELECT *
+      FROM vcart_items
+      WHERE store_code = $1
+        AND product_id = $2
+        AND COALESCE(color, '') = $3
+      `,
+      [
+        store_code,
+        product_id,
+        selectedColor
+      ]
+    );
 
-const {
+    if (check.rows.length > 0) {
 
-store_code,
+      // Add requested quantity
+      await pool.query(
+        `
+        UPDATE vcart_items
+        SET quantity = quantity + $1
+        WHERE store_code = $2
+          AND product_id = $3
+          AND COALESCE(color, '') = $4
+        `,
+        [
+          qty,
+          store_code,
+          product_id,
+          selectedColor
+        ]
+      );
 
-product_id,
+    } else {
 
-product_name,
+      // Create new cart item with requested quantity
+      await pool.query(
+        `
+        INSERT INTO vcart_items
+        (
+          store_code,
+          product_id,
+          product_name,
+          brand,
+          category,
+          image,
+          price,
+          color,
+          sku,
+          quantity
+        )
+        VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,
+        [
+          store_code,
+          product_id,
+          product_name,
+          brand,
+          category,
+          image,
+          price,
+          selectedColor,
+          sku || "",
+          qty
+        ]
+      );
+    }
 
-brand,
+    res.json({
+      success: true,
+      message: `Added ${qty} item(s) to cart`,
+      quantity: qty,
+      color: selectedColor
+    });
 
-category,
+  } catch (error) {
 
-image,
+    console.log("ADD CART ERROR", error);
 
-price
-
-}=req.body;
-
-
-
-
-
-const check = await pool.query(
-
-`
-SELECT *
-
-FROM vcart_items
-
-WHERE store_code=$1
-
-AND product_id=$2
-
-`,
-[
-store_code,
-product_id
-]
-
-);
-
-
-
-
-
-
-if(check.rows.length > 0){
-
-
-await pool.query(
-
-`
-UPDATE vcart_items
-
-SET quantity = quantity + 1
-
-WHERE store_code=$1
-
-AND product_id=$2
-
-`,
-[
-store_code,
-product_id
-]
-
-);
-
-
-}
-
-else{
-
-
-await pool.query(
-
-`
-INSERT INTO vcart_items
-(
-store_code,
-product_id,
-product_name,
-brand,
-category,
-image,
-price,
-quantity
-)
-
-VALUES
-($1,$2,$3,$4,$5,$6,$7,1)
-
-`,
-[
-store_code,
-product_id,
-product_name,
-brand,
-category,
-image,
-price
-]
-
-);
-
-
-}
-
-
-
-
-
-res.json({
-
-success:true,
-
-message:"Added to cart"
-
+    res.status(500).json({
+      success: false,
+      message: "Failed to add product to cart"
+    });
+  }
 });
-
-
-}
-catch(error){
-
-
-console.log(
-"ADD CART ERROR",
-error
-);
-
-
-res.status(500).json({
-
-success:false
-
-});
-
-
-}
-
-
-});
-
 
 
 
