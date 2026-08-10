@@ -3043,138 +3043,76 @@ GET /reports/monthly/:storeCode
 */
 
 
-router.get("/monthly/:storeCode",async(req,res)=>{
+router.get("/monthly/:storeCode", async (req, res) => {
+  try {
+    const { storeCode } = req.params;
 
+    const result = await pool.query(
+      `
+      SELECT
 
-try{
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ) AS month,
 
+        COUNT(*) AS total_orders,
 
-const {
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_sales,
 
-storeCode
+        COALESCE(
+          SUM(advance_paid),
+          0
+        ) AS received,
 
-}=req.params;
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending
 
+      FROM optical_orders
 
+      WHERE store_code = $1
 
-const result=await pool.query(
+      AND LOWER(status) = 'completed'
 
-`
+      GROUP BY
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ),
 
-SELECT
+        DATE_TRUNC(
+          'month',
+          order_date
+        )
 
+      ORDER BY
+        DATE_TRUNC(
+          'month',
+          order_date
+        ) DESC
+      `,
+      [storeCode]
+    );
 
-TO_CHAR(
-order_date,
-'Mon YYYY'
-)
-AS month,
+    res.json({
+      success: true,
+      data: result.rows
+    });
 
+  } catch (error) {
+    console.log(error);
 
-
-COUNT(*) AS total_orders,
-
-
-
-COALESCE(
-SUM(total_amount),
-0
-)
-AS total_sales,
-
-
-
-COALESCE(
-SUM(advance_paid),
-0
-)
-AS received,
-
-
-
-COALESCE(
-SUM(balance_amount),
-0
-)
-AS pending
-
-
-
-FROM optical_orders
-
-
-
-WHERE store_code=$1
-
-
-
-GROUP BY
-
-
-TO_CHAR(
-order_date,
-'Mon YYYY'
-),
-
-
-DATE_TRUNC(
-'month',
-order_date
-)
-
-
-
-ORDER BY
-
-
-DATE_TRUNC(
-'month',
-order_date
-)
-DESC
-
-
-
-`,
-
-[storeCode]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-data:result.rows
-
+    res.status(500).json({
+      success: false,
+      message: "Monthly report error"
+    });
+  }
 });
-
-
-}
-
-
-catch(error){
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Monthly report error"
-
-});
-
-
-}
-
-
-});
-
 
 /*
 ================================================
@@ -3183,292 +3121,229 @@ GET /reports/monthly/:storeCode/pdf
 ================================================
 */
 
-router.get("/monthly/:storeCode/pdf", async(req,res)=>{
-
-try{
-
-
-const {
-storeCode
-}=req.params;
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-TO_CHAR(
-order_date,
-'Mon YYYY'
-)
-AS month,
-
-
-COUNT(*) AS total_orders,
-
-
-COALESCE(
-SUM(total_amount),
-0
-)
-AS total_sales,
-
-
-COALESCE(
-SUM(advance_paid),
-0
-)
-AS received,
-
-
-COALESCE(
-SUM(balance_amount),
-0
-)
-AS pending
-
-
-
-FROM optical_orders
-
-
-
-WHERE store_code=$1
-
-
-
-GROUP BY
-
-
-TO_CHAR(
-order_date,
-'Mon YYYY'
-),
-
-
-DATE_TRUNC(
-'month',
-order_date
-)
-
-
-
-ORDER BY
-
-
-DATE_TRUNC(
-'month',
-order_date
-)
-DESC
-
-
-`,
-
-[storeCode]
-
-
-);
-
-
-
-
-
-res.setHeader(
-"Content-Type",
-"application/pdf"
-);
-
-
-res.setHeader(
-"Content-Disposition",
-"attachment; filename=monthly-sales-report.pdf"
-);
-
-
-
-
-const doc = new PDFDocument({
-margin:40
-});
-
-
-
-doc.pipe(res);
-
-
-
-
-// HEADER
-
-doc.fontSize(20)
-.font("Helvetica-Bold")
-.text(
-"VISION EYE CARE",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(16)
-.text(
-"Monthly Sales Report",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown(2);
-
-
-
-doc.fontSize(11)
-.text(
-`Store Code : ${storeCode}`
-);
-
-
-
-doc.moveDown();
-
-
-
-
-
-let grandTotal=0;
-
-let totalOrders=0;
-
-
-
-
-
-result.rows.forEach((item,index)=>{
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(12)
-.font("Helvetica-Bold")
-.text(
-`${index+1}. ${item.month}`
-);
-
-
-
-doc.fontSize(10)
-.font("Helvetica")
-.text(
-
-`
+router.get("/monthly/:storeCode/pdf", async (req, res) => {
+  try {
+    const { storeCode } = req.params;
+    const { status = "" } = req.query;
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ) AS month,
+
+        COUNT(*) AS total_orders,
+
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_sales,
+
+        COALESCE(
+          SUM(advance_paid),
+          0
+        ) AS received,
+
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending
+
+      FROM optical_orders
+
+      WHERE store_code = $1
+
+      AND (
+        $2 = ''
+        OR LOWER(status) = LOWER($2)
+      )
+
+      GROUP BY
+
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ),
+
+        DATE_TRUNC(
+          'month',
+          order_date
+        )
+
+      ORDER BY
+
+        DATE_TRUNC(
+          'month',
+          order_date
+        ) DESC
+      `,
+      [
+        storeCode,
+        status || ""
+      ]
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/pdf"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=monthly-sales-report.pdf"
+    );
+
+    const doc = new PDFDocument({
+      margin: 40
+    });
+
+    doc.pipe(res);
+
+    // HEADER
+    doc
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text(
+        "VISION EYE CARE",
+        {
+          align: "center"
+        }
+      );
+
+    doc.moveDown();
+
+    doc
+      .fontSize(16)
+      .text(
+        "Monthly Sales Report",
+        {
+          align: "center"
+        }
+      );
+
+    doc.moveDown(2);
+
+    doc
+      .fontSize(11)
+      .font("Helvetica")
+      .text(
+        `Store Code : ${storeCode}`
+      );
+
+    doc.moveDown();
+
+    // SHOW STATUS IN PDF
+    doc
+      .fontSize(11)
+      .font("Helvetica-Bold")
+      .text(
+        `Status : ${status ? status : "All"}`
+      );
+
+    doc.moveDown();
+
+    let grandTotal = 0;
+    let totalReceived = 0;
+    let totalPending = 0;
+    let totalOrders = 0;
+
+    result.rows.forEach((item, index) => {
+
+      doc.moveDown();
+
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text(
+          `${index + 1}. ${item.month}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `
 Total Orders : ${item.total_orders}
 
-Total Sales  : ₹${item.total_sales}
+Total Sales  : ₹${Number(
+            item.total_sales || 0
+          ).toFixed(2)}
 
-Received     : ₹${item.received}
+Received     : ₹${Number(
+            item.received || 0
+          ).toFixed(2)}
 
-Pending      : ₹${item.pending}
+Pending      : ₹${Number(
+            item.pending || 0
+          ).toFixed(2)}
 
--------------------------------------
+--------------------------------
 `
+        );
 
-);
+      grandTotal += Number(
+        item.total_sales || 0
+      );
 
+      totalReceived += Number(
+        item.received || 0
+      );
 
+      totalPending += Number(
+        item.pending || 0
+      );
 
-grandTotal += Number(
-item.total_sales || 0
-);
+      totalOrders += Number(
+        item.total_orders || 0
+      );
 
+    });
 
-totalOrders += Number(
-item.total_orders || 0
-);
+    doc.moveDown(2);
 
+    doc
+      .fontSize(14)
+      .font("Helvetica-Bold")
+      .text(
+        "Summary"
+      );
 
+    doc.moveDown();
 
-});
+    doc
+      .fontSize(11)
+      .font("Helvetica")
+      .text(
+        `
+Total Orders  : ${totalOrders}
 
+Total Sales   : ₹${grandTotal.toFixed(2)}
 
+Total Received: ₹${totalReceived.toFixed(2)}
 
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(14)
-.font("Helvetica-Bold")
-.text(
-"Summary"
-);
-
-
-
-doc.fontSize(11)
-.font("Helvetica")
-.text(
-
+Total Pending : ₹${totalPending.toFixed(2)}
 `
+      );
 
-Total Orders : ${totalOrders}
+    doc.end();
 
-Total Sales  : ₹${grandTotal}
+  } catch (error) {
 
-`
+    console.log(
+      "MONTHLY PDF ERROR",
+      error
+    );
 
-);
+    res.status(500).json({
+      success: false,
+      message: "Monthly PDF generation failed",
+      error: error.message
+    });
 
-
-
-
-doc.end();
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"MONTHLY PDF ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Monthly PDF generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
-
+  }
 });
 /*
 ================================================
@@ -3477,261 +3352,218 @@ GET /reports/monthly/:storeCode/excel
 ================================================
 */
 
-router.get("/monthly/:storeCode/excel", async(req,res)=>{
-
-try{
-
-
-const {
-storeCode
-}=req.params;
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-TO_CHAR(
-order_date,
-'Mon YYYY'
-)
-AS month,
-
-
-COUNT(*) AS total_orders,
-
-
-COALESCE(
-SUM(total_amount),
-0
-)
-AS total_sales,
-
-
-COALESCE(
-SUM(advance_paid),
-0
-)
-AS received,
-
-
-COALESCE(
-SUM(balance_amount),
-0
-)
-AS pending
-
-
-
-FROM optical_orders
-
-
-
-WHERE store_code=$1
-
-
-
-GROUP BY
-
-
-TO_CHAR(
-order_date,
-'Mon YYYY'
-),
-
-
-DATE_TRUNC(
-'month',
-order_date
-)
-
-
-
-ORDER BY
-
-
-DATE_TRUNC(
-'month',
-order_date
-)
-DESC
-
-
-`,
-
-[storeCode]
-
-
-);
-
-
-
-
-
-const workbook = new ExcelJS.Workbook();
-
-
-const sheet =
-workbook.addWorksheet(
-"Monthly Sales"
-);
-
-
-
-
-
-sheet.columns=[
-
-{
-header:"Month",
-key:"month",
-width:20
-},
-
-{
-header:"Total Orders",
-key:"total_orders",
-width:15
-},
-
-{
-header:"Total Sales",
-key:"total_sales",
-width:18
-},
-
-{
-header:"Received",
-key:"received",
-width:18
-},
-
-{
-header:"Pending",
-key:"pending",
-width:18
-}
-
-];
-
-
-
-
-
-let grandTotal=0;
-
-let totalOrders=0;
-
-
-
-result.rows.forEach(row=>{
-
-
-sheet.addRow({
-
-month:row.month,
-
-total_orders:row.total_orders,
-
-total_sales:Number(row.total_sales),
-
-received:Number(row.received),
-
-pending:Number(row.pending)
-
-});
-
-
-grandTotal += Number(row.total_sales || 0);
-
-totalOrders += Number(row.total_orders || 0);
-
-
-});
-
-
-
-
-
-// SUMMARY ROW
-
-sheet.addRow({});
-
-sheet.addRow({
-
-month:"TOTAL",
-
-total_orders:totalOrders,
-
-total_sales:grandTotal
-
-
-});
-
-
-
-
-
-res.setHeader(
-
-"Content-Type",
-
-"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-);
-
-
-
-res.setHeader(
-
-"Content-Disposition",
-
-"attachment; filename=monthly-sales-report.xlsx"
-
-);
-
-
-
-
-
-await workbook.xlsx.write(res);
-
-
-res.end();
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"MONTHLY EXCEL ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Monthly Excel generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
+router.get("/monthly/:storeCode/excel", async (req, res) => {
+  try {
+    const { storeCode } = req.params;
+    const { status = "" } = req.query;
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ) AS month,
+
+        COUNT(*) AS total_orders,
+
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_sales,
+
+        COALESCE(
+          SUM(advance_paid),
+          0
+        ) AS received,
+
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending
+
+      FROM optical_orders
+
+      WHERE store_code = $1
+
+      AND (
+        $2 = ''
+        OR LOWER(status) = LOWER($2)
+      )
+
+      GROUP BY
+
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ),
+
+        DATE_TRUNC(
+          'month',
+          order_date
+        )
+
+      ORDER BY
+
+        DATE_TRUNC(
+          'month',
+          order_date
+        ) DESC
+      `,
+      [
+        storeCode,
+        status || ""
+      ]
+    );
+
+    const workbook = new ExcelJS.Workbook();
+
+    const sheet = workbook.addWorksheet(
+      "Monthly Sales"
+    );
+
+    // REPORT INFORMATION
+    sheet.addRow([
+      "Store Code",
+      storeCode
+    ]);
+
+    sheet.addRow([
+      "Status",
+      status || "All"
+    ]);
+
+    sheet.addRow([]);
+
+    // COLUMNS
+    sheet.columns = [
+      {
+        header: "Month",
+        key: "month",
+        width: 20
+      },
+      {
+        header: "Total Orders",
+        key: "total_orders",
+        width: 15
+      },
+      {
+        header: "Total Sales",
+        key: "total_sales",
+        width: 18
+      },
+      {
+        header: "Received",
+        key: "received",
+        width: 18
+      },
+      {
+        header: "Pending",
+        key: "pending",
+        width: 18
+      }
+    ];
+
+    let grandTotal = 0;
+    let totalReceived = 0;
+    let totalPending = 0;
+    let totalOrders = 0;
+
+    result.rows.forEach(row => {
+
+      const totalSales =
+        Number(row.total_sales || 0);
+
+      const received =
+        Number(row.received || 0);
+
+      const pending =
+        Number(row.pending || 0);
+
+      const orders =
+        Number(row.total_orders || 0);
+
+      sheet.addRow({
+        month: row.month,
+        total_orders: orders,
+        total_sales: totalSales,
+        received: received,
+        pending: pending
+      });
+
+      grandTotal += totalSales;
+      totalReceived += received;
+      totalPending += pending;
+      totalOrders += orders;
+
+    });
+
+    // SUMMARY
+    sheet.addRow({});
+
+    sheet.addRow({
+      month: "TOTAL",
+      total_orders: totalOrders,
+      total_sales: grandTotal,
+      received: totalReceived,
+      pending: totalPending
+    });
+
+    // Currency formatting
+    sheet.getColumn("total_sales").numFmt =
+      '₹#,##0.00';
+
+    sheet.getColumn("received").numFmt =
+      '₹#,##0.00';
+
+    sheet.getColumn("pending").numFmt =
+      '₹#,##0.00';
+
+    // Header styling
+    const headerRow = sheet.getRow(4);
+
+    headerRow.font = {
+      bold: true
+    };
+
+    // Summary styling
+    const lastRow = sheet.lastRow;
+
+    if (lastRow) {
+      lastRow.font = {
+        bold: true
+      };
+    }
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=monthly-sales-report.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+
+    res.end();
+
+  } catch (error) {
+
+    console.log(
+      "MONTHLY EXCEL ERROR",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Monthly Excel generation failed",
+      error: error.message
+    });
+
+  }
 });
 /*
 ================================================
