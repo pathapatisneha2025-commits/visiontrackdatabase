@@ -2283,129 +2283,98 @@ GET /reports/stock/:storeCode
 */
 
 
-router.get("/stock/:storeCode", async(req,res)=>{
-
-
-try{
-
-
-const {
-storeCode
-}=req.params;
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-id,
-
-barcode,
-
-brand,
-
-frame_name,
-
-model,
-
-color,
-
-size,
-
-material,
-
-gender,
-
-lens_type,
-
-power_range,
-
-coating,
-
-lens_index,
-
-contact_type,
-
-power,
-
-base_curve,
-
-diameter,
-
-expiry_date,
-
-accessory_name,
-
-purchase_price,
-
-selling_price,
-
-quantity
-
-
-
-FROM stock_inventory
-
-
-
-WHERE store_code=$1
-
-
-
-ORDER BY id DESC
-
-
-`,
-
-[storeCode]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-count:result.rows.length,
-
-data:result.rows
-
-});
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"STOCK REPORT ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Stock report error",
-
-error:error.message
-
-});
-
-
-}
-
-
+router.get("/stock/:storeCode", async (req, res) => {
+  try {
+    const { storeCode } = req.params;
+    const { category, fromDate, toDate } = req.query;
+
+    let query = `
+      SELECT
+        id,
+        barcode,
+        category,
+        brand,
+
+        frame_name,
+        model,
+        color,
+        size,
+        material,
+        gender,
+
+        lens_type,
+        power_range,
+        coating,
+        lens_index,
+
+        contact_type,
+        power,
+        base_curve,
+        diameter,
+        expiry_date,
+
+        accessory_name,
+
+        purchase_price,
+        selling_price,
+        quantity,
+        created_at
+
+      FROM stock_inventory
+
+      WHERE store_code = $1
+    `;
+
+    const params = [storeCode];
+    let paramIndex = 2;
+
+    // CATEGORY FILTER
+    if (category && category.trim() !== "") {
+      query += ` AND category = $${paramIndex}`;
+      params.push(category.trim());
+      paramIndex++;
+    }
+
+    // FROM DATE
+    if (fromDate && fromDate.trim() !== "") {
+      query += ` AND DATE(created_at) >= $${paramIndex}`;
+      params.push(fromDate);
+      paramIndex++;
+    }
+
+    // TO DATE
+    if (toDate && toDate.trim() !== "") {
+      query += ` AND DATE(created_at) <= $${paramIndex}`;
+      params.push(toDate);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY id DESC`;
+
+    const result = await pool.query(
+      query,
+      params
+    );
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows
+    });
+
+  } catch (error) {
+
+    console.log(
+      "STOCK REPORT ERROR",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Stock report error",
+      error: error.message
+    });
+  }
 });
 
 
@@ -2417,273 +2386,321 @@ GET /reports/stock/:storeCode/pdf
 ================================================
 */
 
-router.get("/stock/:storeCode/pdf", async(req,res)=>{
+router.get("/stock/:storeCode/pdf", async (req, res) => {
+  try {
+    const { storeCode } = req.params;
 
-try{
+    const {
+      category,
+      fromDate,
+      toDate
+    } = req.query;
 
+    let query = `
+      SELECT
+        barcode,
+        category,
 
-const { storeCode } = req.params;
+        brand,
+        frame_name,
+        model,
+        color,
+        size,
+        material,
+        gender,
 
+        lens_type,
+        power_range,
+        coating,
+        lens_index,
 
-const result = await pool.query(
+        contact_type,
+        power,
+        base_curve,
+        diameter,
+        expiry_date,
 
+        accessory_name,
+
+        purchase_price,
+        selling_price,
+        quantity,
+        created_at
+
+      FROM stock_inventory
+
+      WHERE store_code = $1
+    `;
+
+    const params = [storeCode];
+    let paramIndex = 2;
+
+    // ================================
+    // CATEGORY FILTER
+    // ================================
+
+    if (category && category.trim() !== "") {
+
+      query += `
+        AND category = $${paramIndex}
+      `;
+
+      params.push(category.trim());
+
+      paramIndex++;
+    }
+
+    // ================================
+    // FROM DATE
+    // ================================
+
+    if (fromDate && fromDate.trim() !== "") {
+
+      query += `
+        AND DATE(created_at) >= $${paramIndex}
+      `;
+
+      params.push(fromDate);
+
+      paramIndex++;
+    }
+
+    // ================================
+    // TO DATE
+    // ================================
+
+    if (toDate && toDate.trim() !== "") {
+
+      query += `
+        AND DATE(created_at) <= $${paramIndex}
+      `;
+
+      params.push(toDate);
+
+      paramIndex++;
+    }
+
+    query += `
+      ORDER BY id DESC
+    `;
+
+    const result = await pool.query(
+      query,
+      params
+    );
+
+    // ================================
+    // PDF HEADERS
+    // ================================
+
+    res.setHeader(
+      "Content-Type",
+      "application/pdf"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=stock-report.pdf"
+    );
+
+    const doc = new PDFDocument({
+      margin: 40
+    });
+
+    doc.pipe(res);
+
+    // ================================
+    // TITLE
+    // ================================
+
+    doc
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text(
+        "VISION EYE CARE",
+        {
+          align: "center"
+        }
+      );
+
+    doc.moveDown();
+
+    doc
+      .fontSize(16)
+      .text(
+        "Stock Report",
+        {
+          align: "center"
+        }
+      );
+
+    doc.moveDown(2);
+
+    // ================================
+    // REPORT INFORMATION
+    // ================================
+
+    doc
+      .fontSize(11)
+      .font("Helvetica")
+      .text(
+        `Store Code : ${storeCode}`
+      );
+
+    if (category) {
+      doc.text(
+        `Category : ${category}`
+      );
+    } else {
+      doc.text(
+        "Category : All Categories"
+      );
+    }
+
+    if (fromDate) {
+      doc.text(
+        `From Date : ${fromDate}`
+      );
+    }
+
+    if (toDate) {
+      doc.text(
+        `To Date : ${toDate}`
+      );
+    }
+
+    doc.moveDown();
+
+    // ================================
+    // TOTALS
+    // ================================
+
+    let totalQuantity = 0;
+
+    // ================================
+    // STOCK RECORDS
+    // ================================
+
+    result.rows.forEach((item, index) => {
+
+      doc.moveDown();
+
+      const productName =
+        item.category === "frames"
+          ? `${item.brand || ""} ${item.frame_name || item.model || ""}`
+          : item.category === "lenses"
+          ? `${item.brand || ""} ${item.lens_type || ""}`
+          : item.category === "contact_lenses"
+          ? `${item.brand || ""} ${item.contact_type || ""}`
+          : `${item.brand || ""} ${item.accessory_name || ""}`;
+
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text(
+          `${index + 1}. ${productName.trim() || "Stock Item"}`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `
+Category : ${item.category || "-"}
+
+Barcode : ${item.barcode || "-"}
+
+Brand : ${item.brand || "-"}
+
+Frame Name : ${item.frame_name || "-"}
+
+Model : ${item.model || "-"}
+
+Color : ${item.color || "-"}
+
+Size : ${item.size || "-"}
+
+Material : ${item.material || "-"}
+
+Gender : ${item.gender || "-"}
+
+Lens Type : ${item.lens_type || "-"}
+
+Power Range : ${item.power_range || "-"}
+
+Coating : ${item.coating || "-"}
+
+Lens Index : ${item.lens_index || "-"}
+
+Contact Type : ${item.contact_type || "-"}
+
+Power : ${item.power || "-"}
+
+Base Curve : ${item.base_curve || "-"}
+
+Diameter : ${item.diameter || "-"}
+
+Expiry Date : ${item.expiry_date || "-"}
+
+Accessory : ${item.accessory_name || "-"}
+
+Purchase Price : ₹${item.purchase_price || 0}
+
+Selling Price : ₹${item.selling_price || 0}
+
+Quantity : ${item.quantity || 0}
+
+Created Date : ${
+            item.created_at
+              ? new Date(item.created_at).toLocaleDateString("en-IN")
+              : "-"
+          }
+
+--------------------------------------------------
 `
-
-SELECT
-
-barcode,
-
-brand,
-
-frame_name,
-
-model,
-
-color,
-
-size,
-
-material,
-
-gender,
-
-lens_type,
-
-power_range,
-
-coating,
-
-lens_index,
-
-contact_type,
-
-power,
-
-base_curve,
-
-diameter,
-
-expiry_date,
-
-accessory_name,
-
-purchase_price,
-
-selling_price,
-
-quantity
-
-
-FROM stock_inventory
-
-
-WHERE store_code=$1
-
-
-ORDER BY id DESC
-
-`,
-
-[storeCode]
-
-);
-
-
-
-
-res.setHeader(
-"Content-Type",
-"application/pdf"
-);
-
-
-res.setHeader(
-"Content-Disposition",
-"attachment; filename=stock-report.pdf"
-);
-
-
-
-
-const doc = new PDFDocument({
-margin:40
-});
-
-
-doc.pipe(res);
-
-
-
-
-doc.fontSize(20)
-.font("Helvetica-Bold")
-.text(
-"VISION EYE CARE",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(16)
-.text(
-"Stock Report",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown(2);
-
-
-
-doc.fontSize(11)
-.text(
-`Store Code : ${storeCode}`
-);
-
-
-
-doc.moveDown();
-
-
-
-let totalQuantity = 0;
-
-
-
-result.rows.forEach((item,index)=>{
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(12)
-.font("Helvetica-Bold")
-.text(
-
-`${index+1}. ${item.brand || ""} ${item.frame_name || ""}`
-
-);
-
-
-
-
-doc.fontSize(10)
-.font("Helvetica")
-.text(
-
-`
-
-Barcode : ${item.barcode}
-
-Model : ${item.model}
-
-Color : ${item.color}
-
-Size : ${item.size}
-
-Material : ${item.material}
-
-Gender : ${item.gender}
-
-Lens Type : ${item.lens_type}
-
-Power Range : ${item.power_range}
-
-Coating : ${item.coating}
-
-Lens Index : ${item.lens_index}
-
-Contact Type : ${item.contact_type}
-
-Power : ${item.power}
-
-Base Curve : ${item.base_curve}
-
-Diameter : ${item.diameter}
-
-Expiry Date : ${item.expiry_date}
-
-Accessory : ${item.accessory_name}
-
-Purchase Price : ₹${item.purchase_price}
-
-Selling Price : ₹${item.selling_price}
-
-Quantity : ${item.quantity}
-
--------------------------------------
-
-`
-
-);
-
-
-
-totalQuantity += Number(
-item.quantity || 0
-);
-
-
-});
-
-
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(14)
-.font("Helvetica-Bold")
-.text(
-
-`Total Stock Quantity : ${totalQuantity}`
-
-);
-
-
-
-
-doc.end();
-
-
-}
-
-catch(error){
-
-
-console.log(
-"STOCK PDF ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Stock PDF generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
+        );
+
+      totalQuantity += Number(
+        item.quantity || 0
+      );
+    });
+
+    // ================================
+    // SUMMARY
+    // ================================
+
+    doc.moveDown();
+
+    doc
+      .fontSize(14)
+      .font("Helvetica-Bold")
+      .text(
+        `Total Records : ${result.rows.length}`
+      );
+
+    doc
+      .fontSize(14)
+      .font("Helvetica-Bold")
+      .text(
+        `Total Stock Quantity : ${totalQuantity}`
+      );
+
+    doc.end();
+
+  } catch (error) {
+
+    console.log(
+      "STOCK PDF ERROR",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Stock PDF generation failed",
+      error: error.message
+    });
+
+  }
 });
 /*
 ================================================
@@ -2692,351 +2709,548 @@ GET /reports/stock/:storeCode/excel
 ================================================
 */
 
-router.get("/stock/:storeCode/excel", async(req,res)=>{
+router.get("/stock/:storeCode/excel", async (req, res) => {
+  try {
 
-try{
+    const { storeCode } = req.params;
 
+    const {
+      category,
+      fromDate,
+      toDate
+    } = req.query;
 
-const {
-storeCode
-}=req.params;
+    // =========================================
+    // BUILD QUERY
+    // =========================================
 
+    let query = `
+      SELECT
 
+        barcode,
+        category,
 
-const result = await pool.query(
+        brand,
 
-`
+        frame_name,
+        model,
+        color,
+        size,
+        material,
+        gender,
 
-SELECT
+        lens_type,
+        power_range,
+        coating,
+        lens_index,
 
+        contact_type,
+        power,
+        base_curve,
+        diameter,
+        expiry_date,
 
-barcode,
+        accessory_name,
 
-brand,
+        purchase_price,
+        selling_price,
+        quantity,
 
-frame_name,
+        created_at
 
-model,
+      FROM stock_inventory
 
-color,
+      WHERE store_code = $1
+    `;
 
-size,
+    const params = [storeCode];
 
-material,
+    let paramIndex = 2;
 
-gender,
+    // =========================================
+    // CATEGORY FILTER
+    // =========================================
 
-lens_type,
+    if (
+      category &&
+      category.trim() !== ""
+    ) {
 
-power_range,
+      query += `
+        AND category = $${paramIndex}
+      `;
 
-coating,
+      params.push(
+        category.trim()
+      );
 
-lens_index,
+      paramIndex++;
+    }
 
-contact_type,
+    // =========================================
+    // FROM DATE FILTER
+    // =========================================
 
-power,
+    if (
+      fromDate &&
+      fromDate.trim() !== ""
+    ) {
 
-base_curve,
+      query += `
+        AND DATE(created_at) >= $${paramIndex}
+      `;
 
-diameter,
+      params.push(fromDate);
 
-expiry_date,
+      paramIndex++;
+    }
 
-accessory_name,
+    // =========================================
+    // TO DATE FILTER
+    // =========================================
 
-purchase_price,
+    if (
+      toDate &&
+      toDate.trim() !== ""
+    ) {
 
-selling_price,
+      query += `
+        AND DATE(created_at) <= $${paramIndex}
+      `;
 
-quantity
+      params.push(toDate);
 
+      paramIndex++;
+    }
 
+    // =========================================
+    // ORDER
+    // =========================================
 
-FROM stock_inventory
+    query += `
+      ORDER BY id DESC
+    `;
 
+    const result = await pool.query(
+      query,
+      params
+    );
 
+    // =========================================
+    // CREATE EXCEL
+    // =========================================
 
-WHERE store_code=$1
+    const workbook =
+      new ExcelJS.Workbook();
 
+    const sheet =
+      workbook.addWorksheet(
+        "Stock Report"
+      );
 
+    // =========================================
+    // REPORT INFORMATION
+    // =========================================
 
-ORDER BY id DESC
-
-
-`,
-
-[storeCode]
-
-
-);
-
-
-
-
-const workbook = new ExcelJS.Workbook();
-
-
-
-const sheet =
-workbook.addWorksheet(
-"Stock Report"
-);
-
-
-
-
-sheet.columns=[
-
-
-{
-header:"Barcode",
-key:"barcode",
-width:20
-},
-
-
-{
-header:"Brand",
-key:"brand",
-width:20
-},
-
-
-{
-header:"Frame Name",
-key:"frame_name",
-width:25
-},
-
-
-{
-header:"Model",
-key:"model",
-width:20
-},
-
-
-{
-header:"Color",
-key:"color",
-width:15
-},
-
-
-{
-header:"Size",
-key:"size",
-width:12
-},
-
-
-{
-header:"Material",
-key:"material",
-width:15
-},
-
-
-{
-header:"Gender",
-key:"gender",
-width:15
-},
-
-
-{
-header:"Lens Type",
-key:"lens_type",
-width:18
-},
-
-
-{
-header:"Power Range",
-key:"power_range",
-width:18
-},
-
-
-{
-header:"Coating",
-key:"coating",
-width:18
-},
-
-
-{
-header:"Lens Index",
-key:"lens_index",
-width:15
-},
-
-
-{
-header:"Contact Type",
-key:"contact_type",
-width:18
-},
-
-
-{
-header:"Power",
-key:"power",
-width:12
-},
-
-
-{
-header:"Base Curve",
-key:"base_curve",
-width:15
-},
-
-
-{
-header:"Diameter",
-key:"diameter",
-width:15
-},
-
-
-{
-header:"Expiry Date",
-key:"expiry_date",
-width:18
-},
-
-
-{
-header:"Accessory Name",
-key:"accessory_name",
-width:20
-},
-
-
-{
-header:"Purchase Price",
-key:"purchase_price",
-width:18
-},
-
-
-{
-header:"Selling Price",
-key:"selling_price",
-width:18
-},
-
-
-{
-header:"Quantity",
-key:"quantity",
-width:15
-}
-
-
-];
-
-
-
-
-
-let totalQuantity=0;
-
-
-
-result.rows.forEach(row=>{
-
-
-sheet.addRow(row);
-
-
-totalQuantity += Number(
-row.quantity || 0
-);
-
-
+    sheet.mergeCells(
+      "A1:W1"
+    );
+
+    sheet.getCell("A1").value =
+      "VISION EYE CARE - STOCK REPORT";
+
+    sheet.getCell("A1").font = {
+      bold: true,
+      size: 16
+    };
+
+    sheet.getCell("A1").alignment = {
+      horizontal: "center"
+    };
+
+    sheet.mergeCells(
+      "A2:W2"
+    );
+
+    sheet.getCell("A2").value =
+      `Store Code: ${storeCode}`;
+
+    if (category) {
+
+      sheet.mergeCells(
+        "A3:W3"
+      );
+
+      sheet.getCell("A3").value =
+        `Category: ${category}`;
+
+    } else {
+
+      sheet.mergeCells(
+        "A3:W3"
+      );
+
+      sheet.getCell("A3").value =
+        "Category: All Categories";
+    }
+
+    if (fromDate) {
+
+      sheet.mergeCells(
+        "A4:W4"
+      );
+
+      sheet.getCell("A4").value =
+        `From Date: ${fromDate}`;
+    }
+
+    if (toDate) {
+
+      sheet.mergeCells(
+        "A5:W5"
+      );
+
+      sheet.getCell("A5").value =
+        `To Date: ${toDate}`;
+    }
+
+    // =========================================
+    // TABLE STARTS AT ROW 7
+    // =========================================
+
+    sheet.columns = [
+
+      {
+        header: "Barcode",
+        key: "barcode",
+        width: 20
+      },
+
+      {
+        header: "Category",
+        key: "category",
+        width: 20
+      },
+
+      {
+        header: "Brand",
+        key: "brand",
+        width: 20
+      },
+
+      {
+        header: "Frame Name",
+        key: "frame_name",
+        width: 25
+      },
+
+      {
+        header: "Model",
+        key: "model",
+        width: 20
+      },
+
+      {
+        header: "Color",
+        key: "color",
+        width: 15
+      },
+
+      {
+        header: "Size",
+        key: "size",
+        width: 12
+      },
+
+      {
+        header: "Material",
+        key: "material",
+        width: 15
+      },
+
+      {
+        header: "Gender",
+        key: "gender",
+        width: 15
+      },
+
+      {
+        header: "Lens Type",
+        key: "lens_type",
+        width: 18
+      },
+
+      {
+        header: "Power Range",
+        key: "power_range",
+        width: 18
+      },
+
+      {
+        header: "Coating",
+        key: "coating",
+        width: 18
+      },
+
+      {
+        header: "Lens Index",
+        key: "lens_index",
+        width: 15
+      },
+
+      {
+        header: "Contact Type",
+        key: "contact_type",
+        width: 18
+      },
+
+      {
+        header: "Power",
+        key: "power",
+        width: 12
+      },
+
+      {
+        header: "Base Curve",
+        key: "base_curve",
+        width: 15
+      },
+
+      {
+        header: "Diameter",
+        key: "diameter",
+        width: 15
+      },
+
+      {
+        header: "Expiry Date",
+        key: "expiry_date",
+        width: 18
+      },
+
+      {
+        header: "Accessory Name",
+        key: "accessory_name",
+        width: 20
+      },
+
+      {
+        header: "Purchase Price",
+        key: "purchase_price",
+        width: 18
+      },
+
+      {
+        header: "Selling Price",
+        key: "selling_price",
+        width: 18
+      },
+
+      {
+        header: "Quantity",
+        key: "quantity",
+        width: 15
+      },
+
+      {
+        header: "Created Date",
+        key: "created_at",
+        width: 20
+      }
+
+    ];
+
+    // =========================================
+    // MOVE HEADER TO ROW 7
+    // =========================================
+
+    const headerRow =
+      sheet.getRow(1);
+
+    // ExcelJS columns automatically create
+    // headers in row 1, so move the data/report
+    // information after the table header.
+
+    const columns = sheet.columns;
+
+    sheet.spliceRows(
+      1,
+      1,
+      []
+    );
+
+    // =========================================
+    // ADD REPORT INFORMATION AGAIN
+    // =========================================
+
+    sheet.insertRows(
+      1,
+      [
+        [
+          "VISION EYE CARE - STOCK REPORT"
+        ],
+        [
+          `Store Code: ${storeCode}`
+        ],
+        [
+          category
+            ? `Category: ${category}`
+            : "Category: All Categories"
+        ],
+        [
+          fromDate
+            ? `From Date: ${fromDate}`
+            : "From Date: All"
+        ],
+        [
+          toDate
+            ? `To Date: ${toDate}`
+            : "To Date: All"
+        ],
+        []
+      ]
+    );
+
+    // =========================================
+    // STYLE REPORT TITLE
+    // =========================================
+
+    sheet.mergeCells(
+      "A1:W1"
+    );
+
+    sheet.getCell("A1").font = {
+      bold: true,
+      size: 16
+    };
+
+    sheet.getCell("A1").alignment = {
+      horizontal: "center"
+    };
+
+    // =========================================
+    // STYLE TABLE HEADER
+    // =========================================
+
+    const tableHeader =
+      sheet.getRow(7);
+
+    tableHeader.eachCell(
+      (cell) => {
+
+        cell.font = {
+          bold: true
+        };
+
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle"
+        };
+
+      }
+    );
+
+    // =========================================
+    // ADD DATA
+    // =========================================
+
+    let totalQuantity = 0;
+
+    result.rows.forEach(
+      (row) => {
+
+        const excelRow = {
+          ...row,
+
+          created_at:
+            row.created_at
+              ? new Date(
+                  row.created_at
+                ).toLocaleDateString(
+                  "en-IN"
+                )
+              : ""
+        };
+
+        sheet.addRow(
+          excelRow
+        );
+
+        totalQuantity += Number(
+          row.quantity || 0
+        );
+
+      }
+    );
+
+    // =========================================
+    // TOTAL
+    // =========================================
+
+    sheet.addRow({});
+
+    const totalRow =
+      sheet.addRow({
+        barcode: "TOTAL",
+        quantity: totalQuantity
+      });
+
+    totalRow.font = {
+      bold: true
+    };
+
+    // =========================================
+    // FREEZE HEADER
+    // =========================================
+
+    sheet.views = [
+      {
+        state: "frozen",
+        ySplit: 7
+      }
+    ];
+
+    // =========================================
+    // RESPONSE
+    // =========================================
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=stock-report.xlsx"
+    );
+
+    await workbook.xlsx.write(
+      res
+    );
+
+    res.end();
+
+  } catch (error) {
+
+    console.log(
+      "STOCK EXCEL ERROR",
+      error
+    );
+
+    res.status(500).json({
+
+      success: false,
+
+      message:
+        "Stock Excel generation failed",
+
+      error:
+        error.message
+
+    });
+
+  }
 });
-
-
-
-
-
-sheet.addRow({});
-
-
-sheet.addRow({
-
-barcode:"TOTAL",
-
-quantity:totalQuantity
-
-});
-
-
-
-
-
-res.setHeader(
-
-"Content-Type",
-
-"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-);
-
-
-
-res.setHeader(
-
-"Content-Disposition",
-
-"attachment; filename=stock-report.xlsx"
-
-);
-
-
-
-
-
-await workbook.xlsx.write(res);
-
-
-res.end();
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"STOCK EXCEL ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Stock Excel generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
-});
-
 
 
 /*
