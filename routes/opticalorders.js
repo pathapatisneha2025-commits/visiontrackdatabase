@@ -617,76 +617,74 @@ message:"Error fetching order"
 
 
 router.put("/payment/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
 
-    const {
-      advance_paid,
-      payment_status
-    } = req.body;
-
+    const { advance_paid } = req.body;
 
     // Get order total amount
     const orderResult = await pool.query(
       `
-      SELECT total_amount 
+      SELECT total_amount
       FROM optical_orders
-      WHERE id=$1
+      WHERE id = $1
       `,
       [id]
     );
 
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
 
-    const totalAmount = Number(orderResult.rows[0]?.total_amount || 0);
-
+    const totalAmount = Number(orderResult.rows[0].total_amount || 0);
     const paidAmount = Number(advance_paid || 0);
 
+    // Calculate balance
+    const balanceAmount = Math.max(totalAmount - paidAmount, 0);
 
+    // Payment/order status
     const status =
       paidAmount >= totalAmount
         ? "Completed"
         : "Pending";
 
-
     await pool.query(
       `
       UPDATE optical_orders
-      SET 
+      SET
         advance_paid = $1,
-        payment_status = $2,
+        balance_amount = $2,
+        payment_status = $3,
         status = $3
       WHERE id = $4
       `,
       [
-        advance_paid,
-        payment_status,
+        paidAmount,
+        balanceAmount,
         status,
-        id
+        id,
       ]
     );
 
-
     res.json({
       success: true,
-      status
+      status,
+      advance_paid: paidAmount,
+      balance_amount: balanceAmount,
     });
 
-
   } catch (err) {
-
     console.log(err);
 
     res.status(500).json({
       success: false,
-      message: "Payment update failed"
+      message: "Payment update failed",
     });
-
   }
-
 });
-
 
 
 
