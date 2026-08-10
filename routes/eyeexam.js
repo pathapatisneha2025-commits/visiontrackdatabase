@@ -67,16 +67,16 @@ router.get("/", async (req, res) => {
 /*
 CREATE NEW EYE EXAM
 */
-
 router.post("/add", async (req, res) => {
   try {
-
     const {
       storeCode,
 
       patient_name,
       patient_id,
       mobile_number,
+      age,
+      gender,
 
       complaint,
       history_notes,
@@ -110,245 +110,214 @@ router.post("/add", async (req, res) => {
 
     } = req.body;
 
-
     if (!storeCode) {
       return res.status(400).json({
-        success:false,
-        message:"Store code missing"
+        success: false,
+        message: "Store code missing"
       });
     }
 
-
-
     // 1. SAVE EYE EXAM
     const result = await pool.query(
+      `
+      INSERT INTO eye_exams
+      (
+        store_code,
 
-`
-INSERT INTO eye_exams
-(
-store_code,
+        patient_name,
+        patient_id,
+        mobile_number,
+        age,
+        gender,
 
-patient_name,
-patient_id,
-mobile_number,
+        complaint,
+        history_notes,
 
-complaint,
-history_notes,
+        od_vision,
+        od_ph,
 
-od_vision,
-od_ph,
+        os_vision,
+        os_ph,
 
-os_vision,
-os_ph,
+        right_sph,
+        right_cyl,
+        right_axis,
 
-right_sph,
-right_cyl,
-right_axis,
+        left_sph,
+        left_cyl,
+        left_axis,
 
-left_sph,
-left_cyl,
-left_axis,
+        pd,
 
-pd,
+        od_iop,
+        os_iop,
 
-od_iop,
-os_iop,
+        diagnosis,
 
-diagnosis,
+        rx,
 
-rx,
+        notes,
 
-notes,
+        next_review_date,
 
-next_review_date,
+        exam_date
+      )
 
-exam_date
-)
+      VALUES
+      (
+        $1,
 
-VALUES
-(
-$1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
 
-$2,
-$3,
-$4,
+        $7,
+        $8,
 
-$5,
-$6,
+        $9,
+        $10,
 
-$7,
-$8,
+        $11,
+        $12,
 
-$9,
-$10,
+        $13,
+        $14,
+        $15,
 
-$11,
-$12,
-$13,
+        $16,
+        $17,
+        $18,
 
-$14,
-$15,
-$16,
+        $19,
 
-$17,
+        $20,
+        $21,
 
-$18,
-$19,
+        $22,
 
-$20,
+        $23,
 
-$21,
+        $24,
 
-$22,
+        $25,
 
-$23,
+        NOW()
+      )
 
-NOW()
-)
+      RETURNING *
+      `,
 
-RETURNING *
+      [
+        storeCode,
 
-`,
+        patient_name,
+        patient_id,
+        mobile_number,
+        age || null,
+        gender || null,
 
-[
+        complaint,
+        history_notes,
 
-storeCode,
+        od_vision,
+        od_ph,
 
-patient_name,
-patient_id,
-mobile_number,
+        os_vision,
+        os_ph,
 
-complaint,
-history_notes,
+        right_sph,
+        right_cyl,
+        right_axis,
 
-od_vision,
-od_ph,
+        left_sph,
+        left_cyl,
+        left_axis,
 
-os_vision,
-os_ph,
+        pd,
 
-right_sph,
-right_cyl,
-right_axis,
+        od_iop,
+        os_iop,
 
-left_sph,
-left_cyl,
-left_axis,
+        diagnosis,
 
-pd,
+        rx,
 
-od_iop,
-os_iop,
+        notes,
 
-diagnosis,
-
-rx,
-
-notes,
-
-next_review_date
-
-]
-
-
-);
-
-
+        next_review_date
+      ]
+    );
 
     // 2. CREATE FOLLOW-UP NOTIFICATION
-    if(next_review_date){
-
+    if (next_review_date) {
 
       await pool.query(
+        `
+        INSERT INTO notifications
+        (
+          store_code,
 
-`
-INSERT INTO notifications
-(
-store_code,
+          patient_id,
+          patient_name,
+          mobile_number,
 
-patient_id,
-patient_name,
-mobile_number,
+          title,
+          message,
 
-title,
-message,
+          notification_date
+        )
 
-notification_date
-)
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7
+        )
+        `,
 
-VALUES
-(
-$1,
-$2,
-$3,
-$4,
-$5,
-$6,
-$7
-)
+        [
+          storeCode,
 
-`,
+          patient_id,
 
-[
+          patient_name,
 
-storeCode,
+          mobile_number,
 
-patient_id,
+          "Eye Follow-up Reminder",
 
-patient_name,
+          `${patient_name} has an eye review appointment. ${diagnosis || "Eye Checkup"}`,
 
-mobile_number,
-
-"Eye Follow-up Reminder",
-
-`${patient_name} has an eye review appointment. ${diagnosis || "Eye Checkup"}`,
-
-next_review_date
-
-]
-
-
-);
-
-
+          next_review_date
+        ]
+      );
     }
 
-
-
     res.json({
-
-      success:true,
-
-      message:"Eye examination saved successfully",
-
-      exam:result.rows[0]
-
+      success: true,
+      message: "Eye examination saved successfully",
+      exam: result.rows[0]
     });
 
-
-
-  }
-
-  catch(error){
+  } catch (error) {
 
     console.log(
       "SAVE EYE EXAM ERROR:",
       error
     );
 
-
     res.status(500).json({
-
-      success:false,
-
-      message:"Error saving eye exam"
-
+      success: false,
+      message: "Error saving eye exam"
     });
-
   }
-
 });
-
 
 
 
