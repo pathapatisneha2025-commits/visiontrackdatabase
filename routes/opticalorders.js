@@ -615,11 +615,9 @@ message:"Error fetching order"
 
 });
 
-
 router.put("/payment/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
     const { advance_paid } = req.body;
 
     // Get order total amount
@@ -643,10 +641,19 @@ router.put("/payment/:id", async (req, res) => {
     const paidAmount = Number(advance_paid || 0);
 
     // Calculate balance
-    const balanceAmount = Math.max(totalAmount - paidAmount, 0);
+    const balanceAmount = Math.max(
+      totalAmount - paidAmount,
+      0
+    );
 
-    // Payment/order status
-    const status =
+    // Payment status
+    const paymentStatus =
+      paidAmount >= totalAmount
+        ? "Paid"
+        : "Due";
+
+    // Order status
+    const orderStatus =
       paidAmount >= totalAmount
         ? "Completed"
         : "Pending";
@@ -658,20 +665,22 @@ router.put("/payment/:id", async (req, res) => {
         advance_paid = $1,
         balance_amount = $2,
         payment_status = $3,
-        status = $3
-      WHERE id = $4
+        status = $4
+      WHERE id = $5
       `,
       [
         paidAmount,
         balanceAmount,
-        status,
+        paymentStatus,
+        orderStatus,
         id,
       ]
     );
 
     res.json({
       success: true,
-      status,
+      payment_status: paymentStatus,
+      status: orderStatus,
       advance_paid: paidAmount,
       balance_amount: balanceAmount,
     });
@@ -685,7 +694,6 @@ router.put("/payment/:id", async (req, res) => {
     });
   }
 });
-
 
 
 /*
