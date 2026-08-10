@@ -3042,86 +3042,7 @@ GET /reports/monthly/:storeCode
 ================================================
 */
 
-
 router.get("/monthly/:storeCode", async (req, res) => {
-  try {
-    const { storeCode } = req.params;
-
-    const result = await pool.query(
-      `
-      SELECT
-
-        TO_CHAR(
-          order_date,
-          'Mon YYYY'
-        ) AS month,
-
-        COUNT(*) AS total_orders,
-
-        COALESCE(
-          SUM(total_amount),
-          0
-        ) AS total_sales,
-
-        COALESCE(
-          SUM(advance_paid),
-          0
-        ) AS received,
-
-        COALESCE(
-          SUM(balance_amount),
-          0
-        ) AS pending
-
-      FROM optical_orders
-
-      WHERE store_code = $1
-
-      AND LOWER(status) = 'completed'
-
-      GROUP BY
-        TO_CHAR(
-          order_date,
-          'Mon YYYY'
-        ),
-
-        DATE_TRUNC(
-          'month',
-          order_date
-        )
-
-      ORDER BY
-        DATE_TRUNC(
-          'month',
-          order_date
-        ) DESC
-      `,
-      [storeCode]
-    );
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-
-  } catch (error) {
-    console.log(error);
-
-    res.status(500).json({
-      success: false,
-      message: "Monthly report error"
-    });
-  }
-});
-
-/*
-================================================
-MONTHLY SALES REPORT PDF
-GET /reports/monthly/:storeCode/pdf
-================================================
-*/
-
-router.get("/monthly/:storeCode/pdf", async (req, res) => {
   try {
     const { storeCode } = req.params;
     const { status = "" } = req.query;
@@ -3158,7 +3079,100 @@ router.get("/monthly/:storeCode/pdf", async (req, res) => {
 
       AND (
         $2 = ''
-        OR LOWER(status) = LOWER($2)
+        OR status ILIKE '%' || $2 || '%'
+      )
+
+      GROUP BY
+
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ),
+
+        DATE_TRUNC(
+          'month',
+          order_date
+        )
+
+      ORDER BY
+
+        DATE_TRUNC(
+          'month',
+          order_date
+        ) DESC
+      `,
+      [
+        storeCode,
+        status || ""
+      ]
+    );
+
+    res.json({
+      success: true,
+      status: status || "All",
+      data: result.rows
+    });
+
+  } catch (error) {
+
+    console.log("MONTHLY REPORT ERROR", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Monthly report error",
+      error: error.message
+    });
+
+  }
+});
+
+/*
+================================================
+MONTHLY SALES REPORT PDF
+GET /reports/monthly/:storeCode/pdf
+================================================
+*/
+
+router.get("/monthly/:storeCode/pdf", async (req, res) => {
+
+  try {
+
+    const { storeCode } = req.params;
+    const { status = "" } = req.query;
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        TO_CHAR(
+          order_date,
+          'Mon YYYY'
+        ) AS month,
+
+        COUNT(*) AS total_orders,
+
+        COALESCE(
+          SUM(total_amount),
+          0
+        ) AS total_sales,
+
+        COALESCE(
+          SUM(advance_paid),
+          0
+        ) AS received,
+
+        COALESCE(
+          SUM(balance_amount),
+          0
+        ) AS pending
+
+      FROM optical_orders
+
+      WHERE store_code = $1
+
+      AND (
+        $2 = ''
+        OR status ILIKE '%' || $2 || '%'
       )
 
       GROUP BY
@@ -3193,7 +3207,7 @@ router.get("/monthly/:storeCode/pdf", async (req, res) => {
 
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=monthly-sales-report.pdf"
+      `attachment; filename=monthly-sales-report-${status || "all"}.pdf`
     );
 
     const doc = new PDFDocument({
@@ -3202,7 +3216,6 @@ router.get("/monthly/:storeCode/pdf", async (req, res) => {
 
     doc.pipe(res);
 
-    // HEADER
     doc
       .fontSize(20)
       .font("Helvetica-Bold")
@@ -3233,15 +3246,9 @@ router.get("/monthly/:storeCode/pdf", async (req, res) => {
         `Store Code : ${storeCode}`
       );
 
-    doc.moveDown();
-
-    // SHOW STATUS IN PDF
-    doc
-      .fontSize(11)
-      .font("Helvetica-Bold")
-      .text(
-        `Status : ${status ? status : "All"}`
-      );
+    doc.text(
+      `Status     : ${status || "All"}`
+    );
 
     doc.moveDown();
 
@@ -3268,17 +3275,11 @@ router.get("/monthly/:storeCode/pdf", async (req, res) => {
           `
 Total Orders : ${item.total_orders}
 
-Total Sales  : ₹${Number(
-            item.total_sales || 0
-          ).toFixed(2)}
+Total Sales  : ₹${item.total_sales}
 
-Received     : ₹${Number(
-            item.received || 0
-          ).toFixed(2)}
+Received     : ₹${item.received}
 
-Pending      : ₹${Number(
-            item.pending || 0
-          ).toFixed(2)}
+Pending      : ₹${item.pending}
 
 --------------------------------
 `
@@ -3302,29 +3303,27 @@ Pending      : ₹${Number(
 
     });
 
-    doc.moveDown(2);
+    doc.moveDown();
 
     doc
       .fontSize(14)
       .font("Helvetica-Bold")
-      .text(
-        "Summary"
-      );
-
-    doc.moveDown();
+      .text("Summary");
 
     doc
       .fontSize(11)
       .font("Helvetica")
       .text(
         `
-Total Orders  : ${totalOrders}
+Status       : ${status || "All"}
 
-Total Sales   : ₹${grandTotal.toFixed(2)}
+Total Orders : ${totalOrders}
 
-Total Received: ₹${totalReceived.toFixed(2)}
+Total Sales  : ₹${grandTotal}
 
-Total Pending : ₹${totalPending.toFixed(2)}
+Received     : ₹${totalReceived}
+
+Pending      : ₹${totalPending}
 `
       );
 
@@ -3344,6 +3343,7 @@ Total Pending : ₹${totalPending.toFixed(2)}
     });
 
   }
+
 });
 /*
 ================================================
@@ -3353,7 +3353,9 @@ GET /reports/monthly/:storeCode/excel
 */
 
 router.get("/monthly/:storeCode/excel", async (req, res) => {
+
   try {
+
     const { storeCode } = req.params;
     const { status = "" } = req.query;
 
@@ -3389,7 +3391,7 @@ router.get("/monthly/:storeCode/excel", async (req, res) => {
 
       AND (
         $2 = ''
-        OR LOWER(status) = LOWER($2)
+        OR status ILIKE '%' || $2 || '%'
       )
 
       GROUP BY
@@ -3417,52 +3419,52 @@ router.get("/monthly/:storeCode/excel", async (req, res) => {
       ]
     );
 
-    const workbook = new ExcelJS.Workbook();
+    const workbook =
+      new ExcelJS.Workbook();
 
-    const sheet = workbook.addWorksheet(
-      "Monthly Sales"
-    );
+    const sheet =
+      workbook.addWorksheet(
+        "Monthly Sales"
+      );
 
-    // REPORT INFORMATION
-    sheet.addRow([
-      "Store Code",
-      storeCode
-    ]);
-
-    sheet.addRow([
-      "Status",
-      status || "All"
-    ]);
-
-    sheet.addRow([]);
-
-    // COLUMNS
     sheet.columns = [
+
       {
         header: "Month",
         key: "month",
         width: 20
       },
+
+      {
+        header: "Status",
+        key: "status",
+        width: 15
+      },
+
       {
         header: "Total Orders",
         key: "total_orders",
         width: 15
       },
+
       {
         header: "Total Sales",
         key: "total_sales",
         width: 18
       },
+
       {
         header: "Received",
         key: "received",
         width: 18
       },
+
       {
         header: "Pending",
         key: "pending",
         width: 18
       }
+
     ];
 
     let grandTotal = 0;
@@ -3472,69 +3474,58 @@ router.get("/monthly/:storeCode/excel", async (req, res) => {
 
     result.rows.forEach(row => {
 
-      const totalSales =
-        Number(row.total_sales || 0);
-
-      const received =
-        Number(row.received || 0);
-
-      const pending =
-        Number(row.pending || 0);
-
-      const orders =
-        Number(row.total_orders || 0);
-
       sheet.addRow({
+
         month: row.month,
-        total_orders: orders,
-        total_sales: totalSales,
-        received: received,
-        pending: pending
+
+        status:
+          status || "All",
+
+        total_orders:
+          Number(row.total_orders || 0),
+
+        total_sales:
+          Number(row.total_sales || 0),
+
+        received:
+          Number(row.received || 0),
+
+        pending:
+          Number(row.pending || 0)
+
       });
 
-      grandTotal += totalSales;
-      totalReceived += received;
-      totalPending += pending;
-      totalOrders += orders;
+      grandTotal +=
+        Number(row.total_sales || 0);
+
+      totalReceived +=
+        Number(row.received || 0);
+
+      totalPending +=
+        Number(row.pending || 0);
+
+      totalOrders +=
+        Number(row.total_orders || 0);
 
     });
 
-    // SUMMARY
     sheet.addRow({});
 
     sheet.addRow({
+
       month: "TOTAL",
+
+      status: status || "All",
+
       total_orders: totalOrders,
+
       total_sales: grandTotal,
+
       received: totalReceived,
+
       pending: totalPending
+
     });
-
-    // Currency formatting
-    sheet.getColumn("total_sales").numFmt =
-      '₹#,##0.00';
-
-    sheet.getColumn("received").numFmt =
-      '₹#,##0.00';
-
-    sheet.getColumn("pending").numFmt =
-      '₹#,##0.00';
-
-    // Header styling
-    const headerRow = sheet.getRow(4);
-
-    headerRow.font = {
-      bold: true
-    };
-
-    // Summary styling
-    const lastRow = sheet.lastRow;
-
-    if (lastRow) {
-      lastRow.font = {
-        bold: true
-      };
-    }
 
     res.setHeader(
       "Content-Type",
@@ -3543,7 +3534,7 @@ router.get("/monthly/:storeCode/excel", async (req, res) => {
 
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=monthly-sales-report.xlsx"
+      `attachment; filename=monthly-sales-report-${status || "all"}.xlsx`
     );
 
     await workbook.xlsx.write(res);
@@ -3558,12 +3549,19 @@ router.get("/monthly/:storeCode/excel", async (req, res) => {
     );
 
     res.status(500).json({
+
       success: false,
-      message: "Monthly Excel generation failed",
-      error: error.message
+
+      message:
+        "Monthly Excel generation failed",
+
+      error:
+        error.message
+
     });
 
   }
+
 });
 /*
 ================================================
