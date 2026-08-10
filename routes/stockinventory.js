@@ -10,54 +10,40 @@ const bwipjs = require("bwip-js");
  Generate Barcode
 */
 
-const generateBarcode = async (storeCode, category) => {
-
-    let prefix = "STK";
-
-
-    if(category === "frames"){
-        prefix = "FRM";
-    }
-    else if(category === "lenses"){
-        prefix = "LEN";
-    }
-    else if(category === "contact_lenses"){
-        prefix = "CL";
-    }
-    else if(category === "accessories"){
-        prefix = "ACC";
-    }
-
-
-
-    const countResult = await pool.query(
-
-        `
-        SELECT COUNT(*) 
-        FROM stock_inventory
-        WHERE store_code=$1
-        `,
-        [
-            storeCode
-        ]
-
+const generateBarcode = async (storeCode) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT barcode
+      FROM stock_inventory
+      WHERE store_code = $1
+        AND barcode ~ '^[0-9]+$'
+      ORDER BY CAST(barcode AS INTEGER) DESC
+      LIMIT 1
+      `,
+      [storeCode]
     );
 
+    let nextNumber = 1;
 
-    const count =
-    Number(countResult.rows[0].count) + 1;
+    if (result.rows.length > 0) {
+      const lastBarcode = parseInt(result.rows[0].barcode, 10);
 
+      if (!isNaN(lastBarcode)) {
+        nextNumber = lastBarcode + 1;
+      }
+    }
 
+    if (nextNumber > 999) {
+      throw new Error("Maximum 3-digit barcode limit reached");
+    }
 
-    const barcode =
-    `${prefix}-${storeCode}-${String(count).padStart(5,"0")}`;
-
-
-
-    return barcode;
-
+    return String(nextNumber).padStart(3, "0");
+  } catch (error) {
+    console.error("Barcode generation error:", error);
+    throw error;
+  }
 };
-
 
 
 
@@ -139,343 +125,146 @@ message:"Failed to fetch stock"
 ADD STOCK
 */
 
-router.post("/add", async(req,res)=>{
-
-
-try{
-
-
-const body=req.body;
-
-
-
-const {
-
-storeCode,
-
-category,
-
-barcode,
-
-brand,
-
-frame_name,
-
-model,
-
-color,
-
-size,
-
-material,
-
-gender,
-
-
-lens_type,
-
-power_range,
-
-coating,
-
-index: lens_index,
-
-
-type: contact_type,
-
-power,
-
-base_curve,
-
-diameter,
-
-expiry_date,
-
-
-accessory_name,
-
-
-purchase_price,
-
-selling_price,
-
-quantity
-
-
-}=body;
-
-
-
-
-
-// Generate barcode automatically
-
-let finalBarcode = barcode;
-
-
-
-if(!finalBarcode){
-
-finalBarcode =
-await generateBarcode(
-storeCode,
-category
-);
-
-}
-
-
-
-
-
-
-/*
- Generate Barcode Image
-*/
-
-let barcodeImage = null;
-
-
-try{
-
-
-const png = await bwipjs.toBuffer({
-
-bcid:"code128",
-
-text:finalBarcode,
-
-scale:3,
-
-height:12,
-
-includetext:true,
-
-textxalign:"center"
-
+router.post("/add", async (req, res) => {
+  try {
+    const body = req.body;
+
+    const {
+      storeCode,
+      category,
+      barcode,
+      brand,
+      frame_name,
+      model,
+      color,
+      size,
+      material,
+      gender,
+      lens_type,
+      power_range,
+      coating,
+      index: lens_index,
+      type: contact_type,
+      power,
+      base_curve,
+      diameter,
+      expiry_date,
+      accessory_name,
+      purchase_price,
+      selling_price,
+      quantity
+    } = body;
+
+    // Generate barcode automatically
+    let finalBarcode = barcode;
+
+    if (!finalBarcode) {
+      finalBarcode = await generateBarcode(storeCode);
+    }
+
+    /*
+      Generate Barcode Image
+    */
+    let barcodeImage = null;
+
+    try {
+      const png = await bwipjs.toBuffer({
+        bcid: "code128",
+        text: finalBarcode,
+        scale: 3,
+        height: 12,
+        includetext: true,
+        textxalign: "center"
+      });
+
+      barcodeImage = `data:image/png;base64,${png.toString("base64")}`;
+    } catch (err) {
+      console.log("Barcode image generation error", err);
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO stock_inventory
+      (
+        store_code,
+        category,
+        barcode,
+        brand,
+        frame_name,
+        model,
+        color,
+        size,
+        material,
+        gender,
+        lens_type,
+        power_range,
+        coating,
+        lens_index,
+        contact_type,
+        power,
+        base_curve,
+        diameter,
+        expiry_date,
+        accessory_name,
+        purchase_price,
+        selling_price,
+        quantity
+      )
+      VALUES
+      (
+        $1,$2,$3,$4,
+        $5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,
+        $15,$16,$17,$18,$19,
+        $20,
+        $21,$22,$23
+      )
+      RETURNING *
+      `,
+      [
+        storeCode,
+        category,
+        finalBarcode,
+        brand,
+        frame_name,
+        model,
+        color,
+        size,
+        material,
+        gender,
+        lens_type,
+        power_range,
+        coating,
+        lens_index,
+        contact_type,
+        power,
+        base_curve,
+        diameter,
+        expiry_date,
+        accessory_name,
+        purchase_price || 0,
+        selling_price || 0,
+        quantity || 0
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Stock added successfully",
+      barcode: finalBarcode,
+      barcodeImage,
+      stock: result.rows[0]
+    });
+
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Stock adding failed"
+    });
+  }
 });
-
-
-
-barcodeImage =
-`data:image/png;base64,${png.toString("base64")}`;
-
-
-}
-
-catch(err){
-
-console.log(
-"Barcode image generation error",
-err
-);
-
-}
-
-
-
-
-
-
-
-
-const result = await pool.query(
-
-`
-
-INSERT INTO stock_inventory
-
-(
-
-store_code,
-
-category,
-
-barcode,
-
-brand,
-
-
-frame_name,
-
-model,
-
-color,
-
-size,
-
-material,
-
-gender,
-
-
-lens_type,
-
-power_range,
-
-coating,
-
-lens_index,
-
-
-contact_type,
-
-power,
-
-base_curve,
-
-diameter,
-
-expiry_date,
-
-
-accessory_name,
-
-
-purchase_price,
-
-selling_price,
-
-quantity
-
-
-)
-
-
-VALUES
-
-
-(
-
-$1,$2,$3,$4,
-
-$5,$6,$7,$8,$9,$10,
-
-$11,$12,$13,$14,
-
-$15,$16,$17,$18,$19,
-
-$20,
-
-$21,$22,$23
-
-)
-
-
-RETURNING *
-
-`,
-
-[
-
-
-storeCode,
-
-category,
-
-finalBarcode,
-
-brand,
-
-
-frame_name,
-
-model,
-
-color,
-
-size,
-
-material,
-
-gender,
-
-
-lens_type,
-
-power_range,
-
-coating,
-
-lens_index,
-
-
-contact_type,
-
-power,
-
-base_curve,
-
-diameter,
-
-expiry_date,
-
-
-accessory_name,
-
-
-purchase_price || 0,
-
-selling_price || 0,
-
-quantity || 0
-
-
-]
-
-
-);
-
-
-
-
-
-
-res.json({
-
-success:true,
-
-message:"Stock added successfully",
-
-
-barcode:finalBarcode,
-
-
-barcodeImage,
-
-
-stock:result.rows[0]
-
-
-});
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(error);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Stock adding failed"
-
-});
-
-
-}
-
-
-
-});
-
 
 
 
