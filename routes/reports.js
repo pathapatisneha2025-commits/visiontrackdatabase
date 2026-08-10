@@ -909,7 +909,7 @@ router.post("/customer", async (req, res) => {
       SELECT
 
         p.patient_id,
-        p.patient_name,
+        p.name,
         p.age,
         p.mobile,
 
@@ -935,7 +935,7 @@ router.post("/customer", async (req, res) => {
 
       AND (
         $2 = ''
-        OR p.patient_name ILIKE '%' || $2 || '%'
+        OR p.name ILIKE '%' || $2 || '%'
       )
 
       AND (
@@ -950,7 +950,7 @@ router.post("/customer", async (req, res) => {
 
       GROUP BY
         p.patient_id,
-        p.patient_name,
+        p.name,
         p.age,
         p.mobile
 
@@ -1014,7 +1014,7 @@ router.post("/customer/pdf", async (req, res) => {
       SELECT
 
         p.patient_id,
-        p.patient_name,
+        p.name,
         p.age,
         p.mobile,
 
@@ -1040,7 +1040,7 @@ router.post("/customer/pdf", async (req, res) => {
 
       AND (
         $2 = ''
-        OR p.patient_name ILIKE '%' || $2 || '%'
+        OR p.name ILIKE '%' || $2 || '%'
       )
 
       AND (
@@ -1055,7 +1055,7 @@ router.post("/customer/pdf", async (req, res) => {
 
       GROUP BY
         p.patient_id,
-        p.patient_name,
+        p.name,
         p.age,
         p.mobile
 
@@ -1338,7 +1338,7 @@ router.post("/customer/excel", async (req, res) => {
       SELECT
 
         p.patient_id,
-        p.patient_name,
+        p.name,
         p.age,
         p.mobile,
 
@@ -1364,7 +1364,7 @@ router.post("/customer/excel", async (req, res) => {
 
       AND (
         $2 = ''
-        OR p.patient_name ILIKE '%' || $2 || '%'
+        OR p.name ILIKE '%' || $2 || '%'
       )
 
       AND (
@@ -1379,7 +1379,7 @@ router.post("/customer/excel", async (req, res) => {
 
       GROUP BY
         p.patient_id,
-        p.patient_name,
+        p.name,
         p.age,
         p.mobile
 
