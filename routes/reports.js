@@ -3574,210 +3574,141 @@ POST /reports/eye-exam
 ================================================
 */
 
-router.post("/eye-exam", async(req,res)=>{
-
-
-try{
-
-
-const {
-
-storeCode,
-
-fromDate,
-
-toDate,
-
-customer
-
-}=req.body;
-
-
-
-if(!storeCode){
-
-return res.status(400).json({
-
-success:false,
-
-message:"Store code required"
-
-});
-
-}
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-id,
-
-
-patient_id,
-
-patient_name,
-
-
-right_sph,
-
-right_cyl,
-
-right_axis,
-
-
-left_sph,
-
-left_cyl,
-
-left_axis,
-
-
-pd,
-
-
-notes,
-
-
-exam_date
-
-
-
-FROM eye_exams
-
-
-
-WHERE store_code=$1
-
-
-
-AND
-
-(
-
-$2=''
-
-OR
-
-exam_date >= TO_DATE($2,'DD-MM-YYYY')
-
-)
-
-
-
-AND
-
-(
-
-$3=''
-
-OR
-
-exam_date <= TO_DATE($3,'DD-MM-YYYY')
-
-)
-
-
-
-AND
-
-(
-
-$4=''
-
-OR
-
-patient_name ILIKE '%'||$4||'%'
-
-)
-
-
-
-ORDER BY exam_date DESC
-WHERE store_code=$1
-
-AND
-(
-$2=''
-OR
-exam_date >= TO_DATE($2,'DD-MM-YYYY')
-)
-
-AND
-(
-$3=''
-OR
-exam_date <= TO_DATE($3,'DD-MMYYYY')
-)
-
-AND
-(
-$4=''
-OR
-patient_id ILIKE '%'||$4||'%'
-)
-
-ORDER BY exam_date DESC
-
-
-`,
-
-[
-
-storeCode,
-
-fromDate || "",
-
-toDate || "",
-
-customer || ""
-
-]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-count:result.rows.length,
-
-data:result.rows
-
-});
-
-
-}
-
-
-catch(error){
-
-
-console.log(error);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Eye examination report error",
-
-error:error.message
-
-});
-
-
-}
-
-
+router.post("/eye-exam", async (req, res) => {
+  try {
+
+    const {
+      storeCode,
+      fromDate,
+      toDate,
+      customer,
+      patientId,
+      age,
+      diagnosis,
+    } = req.body;
+
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        e.id,
+
+        e.patient_id,
+
+        e.patient_name,
+
+        p.age,
+
+        p.mobile,
+
+        e.diagnosis,
+
+        e.right_sph,
+        e.right_cyl,
+        e.right_axis,
+
+        e.left_sph,
+        e.left_cyl,
+        e.left_axis,
+
+        e.add_power,
+
+        e.pd,
+
+        e.notes,
+
+        e.exam_date
+
+      FROM eye_exams e
+
+      LEFT JOIN patients p
+        ON p.patient_id = e.patient_id
+        AND p.store_code = e.store_code
+
+      WHERE e.store_code = $1
+
+      -- FROM DATE
+      AND (
+        NULLIF(TRIM($2), '') IS NULL
+        OR e.exam_date >= TO_DATE(
+          TRIM($2),
+          'DD-MM-YYYY'
+        )
+      )
+
+      -- TO DATE
+      AND (
+        NULLIF(TRIM($3), '') IS NULL
+        OR e.exam_date <= TO_DATE(
+          TRIM($3),
+          'DD-MM-YYYY'
+        )
+      )
+
+      -- CUSTOMER NAME
+      AND (
+        NULLIF(TRIM($4), '') IS NULL
+        OR e.patient_name ILIKE '%' || TRIM($4) || '%'
+      )
+
+      -- PATIENT ID
+      AND (
+        NULLIF(TRIM($5), '') IS NULL
+        OR e.patient_id ILIKE '%' || TRIM($5) || '%'
+      )
+
+      -- AGE
+      AND (
+        NULLIF(TRIM($6), '') IS NULL
+        OR p.age::TEXT = TRIM($6)
+      )
+
+      -- DIAGNOSIS
+      AND (
+        NULLIF(TRIM($7), '') IS NULL
+        OR e.diagnosis ILIKE '%' || TRIM($7) || '%'
+      )
+
+      ORDER BY e.exam_date DESC
+      `,
+      [
+        storeCode || "",
+        fromDate || "",
+        toDate || "",
+        customer || "",
+        patientId || "",
+        age || "",
+        diagnosis || "",
+      ]
+    );
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+
+  } catch (error) {
+
+    console.log(
+      "EYE EXAM REPORT ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Eye examination report error",
+      error: error.message,
+    });
+
+  }
 });
 /*
 ================================================
@@ -3785,242 +3716,408 @@ EYE EXAM REPORT PDF
 POST /reports/eye-exam/pdf
 ================================================
 */
+router.post("/eye-exam/pdf", async (req, res) => {
+  try {
 
-router.post("/eye-exam/pdf", async(req,res)=>{
+    const {
+      storeCode,
+      fromDate,
+      toDate,
+      customer,
+      patientId,
+      age,
+      diagnosis,
+    } = req.body;
 
-try{
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code required",
+      });
+    }
 
-const {
-storeCode,
-fromDate,
-toDate,
-customer
-}=req.body;
+    const result = await pool.query(
+      `
+      SELECT
 
+        e.patient_id,
 
-const result = await pool.query(
+        e.patient_name,
 
-`
+        p.age,
 
-SELECT
+        p.mobile,
 
-patient_id,
+        e.diagnosis,
 
-patient_name,
+        e.right_sph,
+        e.right_cyl,
+        e.right_axis,
 
-right_sph,
+        e.left_sph,
+        e.left_cyl,
+        e.left_axis,
 
-right_cyl,
+        e.add_power,
 
-right_axis,
+        e.pd,
 
-left_sph,
+        e.notes,
 
-left_cyl,
+        e.exam_date
 
-left_axis,
+      FROM eye_exams e
 
-pd,
+      LEFT JOIN patients p
+        ON p.patient_id = e.patient_id
+        AND p.store_code = e.store_code
 
-notes,
+      WHERE e.store_code = $1
 
-exam_date
+      -- FROM DATE
+      AND (
+        NULLIF(TRIM($2), '') IS NULL
+        OR e.exam_date >= TO_DATE(
+          TRIM($2),
+          'DD-MM-YYYY'
+        )
+      )
 
+      -- TO DATE
+      AND (
+        NULLIF(TRIM($3), '') IS NULL
+        OR e.exam_date <= TO_DATE(
+          TRIM($3),
+          'DD-MM-YYYY'
+        )
+      )
 
-FROM eye_exams
+      -- CUSTOMER NAME
+      AND (
+        NULLIF(TRIM($4), '') IS NULL
+        OR e.patient_name ILIKE '%' || TRIM($4) || '%'
+      )
 
+      -- PATIENT ID
+      AND (
+        NULLIF(TRIM($5), '') IS NULL
+        OR e.patient_id ILIKE '%' || TRIM($5) || '%'
+      )
 
-WHERE store_code=$1
+      -- AGE
+      AND (
+        NULLIF(TRIM($6), '') IS NULL
+        OR p.age::TEXT = TRIM($6)
+      )
 
+      -- DIAGNOSIS
+      AND (
+        NULLIF(TRIM($7), '') IS NULL
+        OR e.diagnosis ILIKE '%' || TRIM($7) || '%'
+      )
 
-AND
-(
-$2=''
-OR
-exam_date >= TO_DATE($2,'DD-MM-YYYY')
-)
+      ORDER BY e.exam_date DESC
+      `,
+      [
+        storeCode || "",
+        fromDate || "",
+        toDate || "",
+        customer || "",
+        patientId || "",
+        age || "",
+        diagnosis || "",
+      ]
+    );
 
+    // =========================
+    // PDF RESPONSE
+    // =========================
 
-AND
-(
-$3=''
-OR
-exam_date <= TO_DATE($3,'DD-MM-YYYY')
-)
+    res.setHeader(
+      "Content-Type",
+      "application/pdf"
+    );
 
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=eye-exam-report.pdf"
+    );
 
-AND
-(
-$4=''
-OR
-patient_id ILIKE '%'||$4||'%'
-)
+    const doc = new PDFDocument({
+      margin: 40,
+    });
 
+    doc.pipe(res);
 
-ORDER BY exam_date DESC
+    // =========================
+    // HEADER
+    // =========================
 
+    doc
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text(
+        "VISION EYE CARE",
+        {
+          align: "center",
+        }
+      );
 
-`,
+    doc.moveDown();
 
-[
-storeCode,
-fromDate || "",
-toDate || "",
-customer || ""
-]
+    doc
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .text(
+        "Eye Examination Report",
+        {
+          align: "center",
+        }
+      );
 
-);
+    doc.moveDown(2);
 
+    // =========================
+    // FILTER DETAILS
+    // =========================
 
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .text(
+        `Store Code : ${storeCode}`
+      );
 
-res.setHeader(
-"Content-Type",
-"application/pdf"
-);
+    doc.text(
+      `Date Range : ${fromDate || "All"} - ${
+        toDate || "All"
+      }`
+    );
 
+    doc.text(
+      `Customer : ${customer || "All"}`
+    );
 
-res.setHeader(
-"Content-Disposition",
-"attachment; filename=eye-exam-report.pdf"
-);
+    doc.text(
+      `Patient ID : ${patientId || "All"}`
+    );
 
+    doc.text(
+      `Age : ${age || "All"}`
+    );
 
+    doc.text(
+      `Diagnosis : ${diagnosis || "All"}`
+    );
 
-const doc = new PDFDocument({
-margin:40
+    doc.moveDown();
+
+    // =========================
+    // TOTAL
+    // =========================
+
+    doc
+      .fontSize(11)
+      .font("Helvetica-Bold")
+      .text(
+        `Total Examinations : ${result.rows.length}`
+      );
+
+    doc.moveDown();
+
+    // =========================
+    // EXAMINATION DATA
+    // =========================
+
+    result.rows.forEach((item, index) => {
+
+      // Prevent content from going outside page
+      if (doc.y > 680) {
+        doc.addPage();
+      }
+
+      doc.moveDown();
+
+      // =========================
+      // PATIENT
+      // =========================
+
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text(
+          `${index + 1}. Patient : ${
+            item.patient_name || "-"
+          }`
+        );
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `Patient ID : ${
+            item.patient_id || "-"
+          }`
+        );
+
+      doc.text(
+        `Age : ${item.age ?? "-"}`
+      );
+
+      doc.text(
+        `Mobile : ${item.mobile || "-"}`
+      );
+
+      doc.text(
+        `Diagnosis : ${
+          item.diagnosis || "-"
+        }`
+      );
+
+      doc.text(
+        `Exam Date : ${
+          item.exam_date || "-"
+        }`
+      );
+
+      doc.moveDown(0.5);
+
+      // =========================
+      // RIGHT EYE
+      // =========================
+
+      doc
+        .fontSize(10)
+        .font("Helvetica-Bold")
+        .text("Right Eye");
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `SPH : ${
+            item.right_sph ?? "-"
+          }`
+        );
+
+      doc.text(
+        `CYL : ${
+          item.right_cyl ?? "-"
+        }`
+      );
+
+      doc.text(
+        `AXIS : ${
+          item.right_axis ?? "-"
+        }`
+      );
+
+      doc.moveDown(0.5);
+
+      // =========================
+      // LEFT EYE
+      // =========================
+
+      doc
+        .fontSize(10)
+        .font("Helvetica-Bold")
+        .text("Left Eye");
+
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(
+          `SPH : ${
+            item.left_sph ?? "-"
+          }`
+        );
+
+      doc.text(
+        `CYL : ${
+          item.left_cyl ?? "-"
+        }`
+      );
+
+      doc.text(
+        `AXIS : ${
+          item.left_axis ?? "-"
+        }`
+      );
+
+      doc.moveDown(0.5);
+
+      // =========================
+      // OTHER DETAILS
+      // =========================
+
+      doc.text(
+        `Add Power : ${
+          item.add_power ?? "-"
+        }`
+      );
+
+      doc.text(
+        `PD : ${
+          item.pd ?? "-"
+        }`
+      );
+
+      doc.text(
+        `Notes : ${
+          item.notes || "-"
+        }`
+      );
+
+      doc.moveDown();
+
+      // =========================
+      // DIVIDER
+      // =========================
+
+      doc
+        .moveTo(40, doc.y)
+        .lineTo(555, doc.y)
+        .stroke();
+
+    });
+
+    // =========================
+    // NO DATA
+    // =========================
+
+    if (result.rows.length === 0) {
+
+      doc.moveDown(2);
+
+      doc
+        .fontSize(12)
+        .font("Helvetica")
+        .text(
+          "No eye examination records found.",
+          {
+            align: "center",
+          }
+        );
+    }
+
+    doc.end();
+
+  } catch (error) {
+
+    console.log(
+      "EYE EXAM PDF ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Eye exam PDF generation failed",
+      error: error.message,
+    });
+
+  }
 });
-
-
-doc.pipe(res);
-
-
-
-doc.fontSize(20)
-.text(
-"VISION EYE CARE",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(16)
-.text(
-"Eye Examination Report",
-{
-align:"center"
-}
-);
-
-
-
-doc.moveDown();
-
-
-
-doc.fontSize(10)
-.text(
-`Date Range : ${fromDate || "All"} - ${toDate || "All"}`
-);
-
-
-
-doc.moveDown();
-
-
-
-result.rows.forEach((item,index)=>{
-
-
-doc.fontSize(12)
-.text(
-`${index+1}. Patient : ${item.patient_name}`
-);
-
-
-
-doc.fontSize(10)
-.text(
-
-`
-Patient ID : ${item.patient_id || ""}
-
-Exam Date : ${item.exam_date}
-
-
-Right Eye
-
-SPH : ${item.right_sph}
-
-CYL : ${item.right_cyl}
-
-AXIS : ${item.right_axis}
-
-
-
-Left Eye
-
-SPH : ${item.left_sph}
-
-CYL : ${item.left_cyl}
-
-AXIS : ${item.left_axis}
-
-
-
-PD : ${item.pd}
-
-
-Notes : ${item.notes}
-
-
-
-----------------------------------------
-
-`
-
-);
-
-
-});
-
-
-
-doc.end();
-
-
-
-}
-
-
-catch(error){
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Eye exam PDF generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
-});
-
-
-
 
 
 
@@ -4032,267 +4129,320 @@ POST /reports/eye-exam/excel
 */
 
 
-router.post("/eye-exam/excel", async(req,res)=>{
-
-
-try{
-
-
-const {
-
-storeCode,
-fromDate,
-toDate,
-customer
-
-}=req.body;
-
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-
-patient_id,
-
-patient_name,
-
-right_sph,
-
-right_cyl,
-
-right_axis,
-
-left_sph,
-
-left_cyl,
-
-left_axis,
-
-add_power,
-
-pd,
-
-notes,
-
-exam_date
-
-
-FROM eye_exams
-
-
-WHERE store_code=$1
-
-
-AND
-(
-$2=''
-OR
-exam_date >= TO_DATE($2,'DD-MM-YYYY')
-)
-
-
-AND
-(
-$3=''
-OR
-exam_date <= TO_DATE($3,'DD-MM-YYYY')
-)
-
-
-AND
-(
-$4=''
-OR
-patient_name ILIKE '%'||$4||'%'
-)
-
-
-ORDER BY exam_date DESC
-
-
-`,
-
-[
-
-storeCode,
-fromDate || "",
-toDate || "",
-customer || ""
-
-]
-
-
-);
-
-
-
-
-
-const workbook = new ExcelJS.Workbook();
-
-
-const sheet = workbook.addWorksheet(
-"Eye Examination"
-);
-
-
-
-sheet.columns=[
-
-
-{
-header:"Patient ID",
-key:"patient_id",
-width:15
-},
-
-
-{
-header:"Patient Name",
-key:"patient_name",
-width:25
-},
-
-
-{
-header:"Right SPH",
-key:"right_sph",
-width:12
-},
-
-
-{
-header:"Right CYL",
-key:"right_cyl",
-width:12
-},
-
-
-{
-header:"Right AXIS",
-key:"right_axis",
-width:12
-},
-
-
-{
-header:"Left SPH",
-key:"left_sph",
-width:12
-},
-
-
-{
-header:"Left CYL",
-key:"left_cyl",
-width:12
-},
-
-
-{
-header:"Left AXIS",
-key:"left_axis",
-width:12
-},
-
-
-{
-header:"Add Power",
-key:"add_power",
-width:15
-},
-
-
-{
-header:"PD",
-key:"pd",
-width:10
-},
-
-
-{
-header:"Notes",
-key:"notes",
-width:30
-},
-
-
-{
-header:"Exam Date",
-key:"exam_date",
-width:15
-}
-
-
-];
-
-
-
-
-result.rows.forEach(row=>{
-
-sheet.addRow(row);
-
+router.post("/eye-exam/excel", async (req, res) => {
+  try {
+    const {
+      storeCode,
+      fromDate,
+      toDate,
+      customer,
+      patientId,
+      age,
+      diagnosis,
+    } = req.body;
+
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        e.patient_id,
+
+        e.patient_name,
+
+        p.age,
+
+        p.mobile,
+
+        e.diagnosis,
+
+        e.right_sph,
+        e.right_cyl,
+        e.right_axis,
+
+        e.left_sph,
+        e.left_cyl,
+        e.left_axis,
+
+        e.add_power,
+
+        e.pd,
+
+        e.notes,
+
+        e.exam_date
+
+      FROM eye_exams e
+
+      LEFT JOIN patients p
+        ON p.patient_id = e.patient_id
+        AND p.store_code = e.store_code
+
+      WHERE e.store_code = $1
+
+      -- FROM DATE
+      AND (
+        NULLIF(TRIM($2), '') IS NULL
+        OR e.exam_date >= TO_DATE(
+          TRIM($2),
+          'DD-MM-YYYY'
+        )
+      )
+
+      -- TO DATE
+      AND (
+        NULLIF(TRIM($3), '') IS NULL
+        OR e.exam_date <= TO_DATE(
+          TRIM($3),
+          'DD-MM-YYYY'
+        )
+      )
+
+      -- CUSTOMER NAME
+      AND (
+        NULLIF(TRIM($4), '') IS NULL
+        OR e.patient_name ILIKE '%' || TRIM($4) || '%'
+      )
+
+      -- PATIENT ID
+      AND (
+        NULLIF(TRIM($5), '') IS NULL
+        OR e.patient_id ILIKE '%' || TRIM($5) || '%'
+      )
+
+      -- AGE
+      AND (
+        NULLIF(TRIM($6), '') IS NULL
+        OR p.age::TEXT = TRIM($6)
+      )
+
+      -- DIAGNOSIS
+      AND (
+        NULLIF(TRIM($7), '') IS NULL
+        OR e.diagnosis ILIKE '%' || TRIM($7) || '%'
+      )
+
+      ORDER BY e.exam_date DESC
+      `,
+      [
+        storeCode || "",
+        fromDate || "",
+        toDate || "",
+        customer || "",
+        patientId || "",
+        age || "",
+        diagnosis || "",
+      ]
+    );
+
+    // =========================
+    // CREATE WORKBOOK
+    // =========================
+
+    const workbook = new ExcelJS.Workbook();
+
+    const sheet = workbook.addWorksheet(
+      "Eye Examination"
+    );
+
+    // =========================
+    // REPORT FILTER DETAILS
+    // =========================
+
+    sheet.addRow([
+      "VISION EYE CARE",
+    ]);
+
+    sheet.addRow([
+      "Eye Examination Report",
+    ]);
+
+    sheet.addRow([
+      "Store Code",
+      storeCode,
+    ]);
+
+    sheet.addRow([
+      "From Date",
+      fromDate || "All",
+    ]);
+
+    sheet.addRow([
+      "To Date",
+      toDate || "All",
+    ]);
+
+    sheet.addRow([
+      "Customer",
+      customer || "All",
+    ]);
+
+    sheet.addRow([
+      "Patient ID",
+      patientId || "All",
+    ]);
+
+    sheet.addRow([
+      "Age",
+      age || "All",
+    ]);
+
+    sheet.addRow([
+      "Diagnosis",
+      diagnosis || "All",
+    ]);
+
+    sheet.addRow([]);
+
+    // =========================
+    // TABLE HEADER
+    // =========================
+
+    const headerRow = sheet.addRow([
+      "Patient ID",
+      "Patient Name",
+      "Age",
+      "Mobile",
+      "Diagnosis",
+
+      "Right SPH",
+      "Right CYL",
+      "Right AXIS",
+
+      "Left SPH",
+      "Left CYL",
+      "Left AXIS",
+
+      "Add Power",
+      "PD",
+      "Notes",
+      "Exam Date",
+    ]);
+
+    headerRow.font = {
+      bold: true,
+    };
+
+    headerRow.alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+
+    // =========================
+    // ADD DATA
+    // =========================
+
+    result.rows.forEach((row) => {
+
+      sheet.addRow([
+        row.patient_id || "",
+        row.patient_name || "",
+        row.age ?? "",
+        row.mobile || "",
+
+        row.diagnosis || "",
+
+        row.right_sph ?? "",
+        row.right_cyl ?? "",
+        row.right_axis ?? "",
+
+        row.left_sph ?? "",
+        row.left_cyl ?? "",
+        row.left_axis ?? "",
+
+        row.add_power ?? "",
+
+        row.pd ?? "",
+
+        row.notes || "",
+
+        row.exam_date || "",
+      ]);
+
+    });
+
+    // =========================
+    // COLUMN WIDTHS
+    // =========================
+
+    sheet.getColumn(1).width = 15;  // Patient ID
+    sheet.getColumn(2).width = 25;  // Patient Name
+    sheet.getColumn(3).width = 10;  // Age
+    sheet.getColumn(4).width = 15;  // Mobile
+    sheet.getColumn(5).width = 25;  // Diagnosis
+
+    sheet.getColumn(6).width = 12;  // Right SPH
+    sheet.getColumn(7).width = 12;  // Right CYL
+    sheet.getColumn(8).width = 12;  // Right AXIS
+
+    sheet.getColumn(9).width = 12;  // Left SPH
+    sheet.getColumn(10).width = 12; // Left CYL
+    sheet.getColumn(11).width = 12; // Left AXIS
+
+    sheet.getColumn(12).width = 15; // Add Power
+    sheet.getColumn(13).width = 10; // PD
+    sheet.getColumn(14).width = 35; // Notes
+    sheet.getColumn(15).width = 18; // Exam Date
+
+    // =========================
+    // FILTER SUMMARY STYLING
+    // =========================
+
+    sheet.getRow(1).font = {
+      bold: true,
+      size: 16,
+    };
+
+    sheet.getRow(2).font = {
+      bold: true,
+      size: 14,
+    };
+
+    // Rows 3-9 contain filters
+    for (let i = 3; i <= 9; i++) {
+      sheet.getCell(i, 1).font = {
+        bold: true,
+      };
+    }
+
+    // =========================
+    // RESPONSE
+    // =========================
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=eye-exam-report.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+
+    res.end();
+
+  } catch (error) {
+
+    console.log(
+      "EYE EXAM EXCEL ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Eye exam Excel generation failed",
+      error: error.message,
+    });
+
+  }
 });
-
-
-
-
-res.setHeader(
-
-"Content-Type",
-
-"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-);
-
-
-
-res.setHeader(
-
-"Content-Disposition",
-
-"attachment; filename=eye-exam-report.xlsx"
-
-);
-
-
-
-await workbook.xlsx.write(res);
-
-
-res.end();
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Eye exam Excel generation failed",
-
-error:error.message
-
-});
-
-
-}
-
-
-});
-
 
 module.exports = router;
