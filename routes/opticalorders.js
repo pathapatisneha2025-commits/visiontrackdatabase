@@ -618,7 +618,11 @@ message:"Error fetching order"
 router.put("/payment/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { advance_paid } = req.body;
+
+    const {
+      advance_paid,
+      balance_paid_date
+    } = req.body;
 
     // Get order total amount
     const orderResult = await pool.query(
@@ -637,8 +641,13 @@ router.put("/payment/:id", async (req, res) => {
       });
     }
 
-    const totalAmount = Number(orderResult.rows[0].total_amount || 0);
-    const paidAmount = Number(advance_paid || 0);
+    const totalAmount = Number(
+      orderResult.rows[0].total_amount || 0
+    );
+
+    const paidAmount = Number(
+      advance_paid || 0
+    );
 
     // Calculate balance
     const balanceAmount = Math.max(
@@ -658,6 +667,12 @@ router.put("/payment/:id", async (req, res) => {
         ? "Completed"
         : "Pending";
 
+    // Save balance paid date ONLY when fully paid
+    const paidDate =
+      paidAmount >= totalAmount
+        ? (balance_paid_date || new Date())
+        : null;
+
     await pool.query(
       `
       UPDATE optical_orders
@@ -665,28 +680,40 @@ router.put("/payment/:id", async (req, res) => {
         advance_paid = $1,
         balance_amount = $2,
         payment_status = $3,
-        status = $4
-      WHERE id = $5
+        status = $4,
+        balance_paid_date = $5
+      WHERE id = $6
       `,
       [
         paidAmount,
         balanceAmount,
         paymentStatus,
         orderStatus,
+        paidDate,
         id,
       ]
     );
 
     res.json({
       success: true,
+
       payment_status: paymentStatus,
+
       status: orderStatus,
+
       advance_paid: paidAmount,
+
       balance_amount: balanceAmount,
+
+      balance_paid_date: paidDate,
     });
 
   } catch (err) {
-    console.log(err);
+
+    console.log(
+      "Payment update error:",
+      err
+    );
 
     res.status(500).json({
       success: false,
@@ -694,7 +721,6 @@ router.put("/payment/:id", async (req, res) => {
     });
   }
 });
-
 
 /*
 UPDATE ORDER STATUS
