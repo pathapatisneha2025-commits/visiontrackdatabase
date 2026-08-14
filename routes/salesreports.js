@@ -2797,6 +2797,174 @@ const buildStockQuery = (storeCode, queryParams = {}) => {
 
 
 
+
+/*
+=========================================================
+STOCK QUERY HELPER
+=========================================================
+
+Frames:
+- Brand Name
+- Frame Name / Model
+- Supplier Name
+- Purchase Price
+- Sale Price
+- Quantity
+
+Lenses:
+- Brand Name
+- Lens Type
+- Coating
+- Quantity
+- Purchase Price
+- Sale Price
+=========================================================
+*/
+
+const buildStockQuery = (
+  storeCode,
+  queryParams = {}
+) => {
+
+  const {
+    category,
+    fromDate,
+    toDate,
+  } = queryParams;
+
+
+  let sql = `
+    SELECT
+      id,
+      barcode,
+      category,
+
+      brand,
+
+      frame_name,
+      model,
+
+      lens_type,
+      coating,
+
+      supplier_name,
+
+      purchase_price,
+      selling_price,
+      quantity,
+
+      created_at
+
+    FROM stock
+
+    WHERE store_code = $1
+  `;
+
+
+  const params = [
+    storeCode
+  ];
+
+  let paramIndex = 2;
+
+
+  /*
+  =======================================================
+  CATEGORY FILTER
+  =======================================================
+  */
+
+  if (
+    category &&
+    category.trim() !== ""
+  ) {
+
+    sql += `
+      AND LOWER(TRIM(category))
+      =
+      LOWER(TRIM($${paramIndex}))
+    `;
+
+    params.push(
+      category.trim()
+    );
+
+    paramIndex++;
+  }
+
+
+  /*
+  =======================================================
+  FROM DATE
+  =======================================================
+  */
+
+  if (
+    fromDate &&
+    fromDate.trim() !== ""
+  ) {
+
+    sql += `
+      AND DATE(created_at)
+      >= $${paramIndex}
+    `;
+
+    params.push(
+      fromDate
+    );
+
+    paramIndex++;
+  }
+
+
+  /*
+  =======================================================
+  TO DATE
+  =======================================================
+  */
+
+  if (
+    toDate &&
+    toDate.trim() !== ""
+  ) {
+
+    sql += `
+      AND DATE(created_at)
+      <= $${paramIndex}
+    `;
+
+    params.push(
+      toDate
+    );
+
+    paramIndex++;
+  }
+
+
+  /*
+  =======================================================
+  ORDER
+  =======================================================
+  */
+
+  sql += `
+    ORDER BY
+      LOWER(COALESCE(brand, '')),
+      LOWER(COALESCE(frame_name, '')),
+      LOWER(COALESCE(model, '')),
+      LOWER(COALESCE(lens_type, '')),
+      id DESC
+  `;
+
+
+  return {
+    query: sql,
+    params,
+  };
+
+};
+
+
 /*
 =========================================================
 STOCK REPORT
@@ -2804,27 +2972,28 @@ GET /reports/stock/:storeCode
 
 Examples:
 
-/reports/stock/STORE001
+GET /reports/stock/STORE001
 
-/reports/stock/STORE001?category=Frames
+GET /reports/stock/STORE001?category=Frames
 
-/reports/stock/STORE001?category=Lenses
+GET /reports/stock/STORE001?category=Lenses
 
-/reports/stock/STORE001?category=Contact%20Lenses
+GET /reports/stock/STORE001?category=Accessories
 
-/reports/stock/STORE001?category=Accessories
-
-/reports/stock/STORE001?category=Goggles
-
-/reports/stock/STORE001?category=Frames&fromDate=01-08-2026&toDate=14-08-2026
+GET /reports/stock/STORE001?category=Goggles
 =========================================================
 */
 
 router.get(
   "/stock/:storeCode",
   async (req, res) => {
+
     try {
-      const { storeCode } = req.params;
+
+      const {
+        storeCode
+      } = req.params;
+
 
       const {
         category,
@@ -2832,6 +3001,12 @@ router.get(
         toDate,
       } = req.query;
 
+
+      /*
+      ====================================================
+      BUILD QUERY
+      ====================================================
+      */
 
       const {
         query,
@@ -2853,13 +3028,207 @@ router.get(
         );
 
 
+      /*
+      ====================================================
+      CATEGORY
+      ====================================================
+      */
+
+      const normalizedCategory =
+        String(
+          category || ""
+        )
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "_");
+
+
+      /*
+      ====================================================
+      FORMAT DATA
+      ====================================================
+      */
+
+      let data = [];
+
+
+      /*
+      ====================================================
+      FRAMES
+      ====================================================
+      */
+
+      if (
+        normalizedCategory === "frames"
+      ) {
+
+        data =
+          result.rows.map(
+            (item) => ({
+
+              brandName:
+                item.brand || "",
+
+              frameNameModel:
+                item.frame_name ||
+                item.model ||
+                "",
+
+              supplierName:
+                item.supplier_name ||
+                "",
+
+              purchasePrice:
+                Number(
+                  item.purchase_price || 0
+                ),
+
+              salePrice:
+                Number(
+                  item.selling_price || 0
+                ),
+
+              quantity:
+                Number(
+                  item.quantity || 0
+                ),
+
+            })
+          );
+
+      }
+
+
+      /*
+      ====================================================
+      LENSES
+      ====================================================
+      */
+
+      else if (
+        normalizedCategory === "lenses"
+      ) {
+
+        data =
+          result.rows.map(
+            (item) => ({
+
+              brandName:
+                item.brand || "",
+
+              lensType:
+                item.lens_type || "",
+
+              coating:
+                item.coating || "",
+
+              quantity:
+                Number(
+                  item.quantity || 0
+                ),
+
+              purchasePrice:
+                Number(
+                  item.purchase_price || 0
+                ),
+
+              salePrice:
+                Number(
+                  item.selling_price || 0
+                ),
+
+            })
+          );
+
+      }
+
+
+      /*
+      ====================================================
+      OTHER CATEGORIES
+      ====================================================
+      */
+
+      else {
+
+        data =
+          result.rows.map(
+            (item) => ({
+
+              brandName:
+                item.brand || "",
+
+              itemName:
+                item.frame_name ||
+                item.model ||
+                item.lens_type ||
+                "",
+
+              supplierName:
+                item.supplier_name ||
+                "",
+
+              quantity:
+                Number(
+                  item.quantity || 0
+                ),
+
+              purchasePrice:
+                Number(
+                  item.purchase_price || 0
+                ),
+
+              salePrice:
+                Number(
+                  item.selling_price || 0
+                ),
+
+            })
+          );
+
+      }
+
+
+      /*
+      ====================================================
+      TOTAL QUANTITY
+      ====================================================
+      */
+
+      const totalQuantity =
+        data.reduce(
+          (
+            total,
+            item
+          ) => {
+
+            return (
+              total +
+              Number(
+                item.quantity || 0
+              )
+            );
+
+          },
+          0
+        );
+
+
+      /*
+      ====================================================
+      RESPONSE
+      ====================================================
+      */
+
       res.json({
+
         success: true,
 
         count:
-          result.rows.length,
+          data.length,
 
         filters: {
+
           category:
             category &&
             category.trim() !== ""
@@ -2871,10 +3240,13 @@ router.get(
 
           toDate:
             toDate || "",
+
         },
 
-        data:
-          result.rows,
+        totalQuantity,
+
+        data,
+
       });
 
     } catch (error) {
@@ -2884,12 +3256,21 @@ router.get(
         error
       );
 
+
       res.status(500).json({
+
         success: false,
-        message: "Stock report error",
-        error: error.message,
+
+        message:
+          "Stock report error",
+
+        error:
+          error.message,
+
       });
+
     }
+
   }
 );
 
@@ -2905,8 +3286,13 @@ GET /reports/stock/:storeCode/pdf
 router.get(
   "/stock/:storeCode/pdf",
   async (req, res) => {
+
     try {
-      const { storeCode } = req.params;
+
+      const {
+        storeCode
+      } = req.params;
+
 
       const {
         category,
@@ -2916,9 +3302,9 @@ router.get(
 
 
       /*
-      ================================================
+      ====================================================
       BUILD QUERY
-      ================================================
+      ====================================================
       */
 
       const {
@@ -2942,9 +3328,24 @@ router.get(
 
 
       /*
-      ================================================
+      ====================================================
+      NORMALIZE CATEGORY
+      ====================================================
+      */
+
+      const normalizedCategory =
+        String(
+          category || ""
+        )
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "_");
+
+
+      /*
+      ====================================================
       PDF HEADERS
-      ================================================
+      ====================================================
       */
 
       res.setHeader(
@@ -2952,15 +3353,26 @@ router.get(
         "application/pdf"
       );
 
+
       res.setHeader(
         "Content-Disposition",
         "attachment; filename=stock-report.pdf"
       );
 
 
+      /*
+      ====================================================
+      CREATE PDF
+      ====================================================
+      */
+
       const doc =
         new PDFDocument({
+
           margin: 40,
+
+          size: "A4",
+
         });
 
 
@@ -2968,9 +3380,9 @@ router.get(
 
 
       /*
-      ================================================
+      ====================================================
       TITLE
-      ================================================
+      ====================================================
       */
 
       doc
@@ -2984,34 +3396,36 @@ router.get(
         );
 
 
-      doc.moveDown();
+      doc.moveDown(0.5);
 
 
       doc
         .fontSize(16)
         .text(
-          "Stock Report",
+          "Stock Details",
           {
             align: "center",
           }
         );
 
 
-      doc.moveDown(2);
+      doc.moveDown();
 
 
       /*
-      ================================================
+      ====================================================
       REPORT INFORMATION
-      ================================================
+      ====================================================
       */
 
       doc
-        .fontSize(11)
-        .font("Helvetica")
-        .text(
-          `Store Code : ${storeCode}`
-        );
+        .fontSize(10)
+        .font("Helvetica");
+
+
+      doc.text(
+        `Store Code : ${storeCode}`
+      );
 
 
       doc.text(
@@ -3042,299 +3456,437 @@ router.get(
 
 
       /*
-      ================================================
-      TOTAL QUANTITY
-      ================================================
+      ====================================================
+      FRAMES PDF
+      ====================================================
       */
 
-      let totalQuantity = 0;
+      if (
+        normalizedCategory === "frames"
+      ) {
+
+        doc
+          .fontSize(14)
+          .font("Helvetica-Bold")
+          .text(
+            "1. Frames"
+          );
 
 
-      /*
-      ================================================
-      STOCK RECORDS
-      ================================================
-      */
-
-      result.rows.forEach(
-        (item, index) => {
-
-          doc.moveDown();
+        doc.moveDown(0.5);
 
 
-          /*
-          ============================================
-          NORMALIZE CATEGORY
-          ============================================
-          */
+        result.rows.forEach(
+          (
+            item,
+            index
+          ) => {
 
-          const normalizedCategory =
-            String(
-              item.category || ""
-            )
-              .trim()
-              .toLowerCase()
-              .replace(/\s+/g, "_");
+            /*
+            ----------------------------------------------
+            ITEM TITLE
+            ----------------------------------------------
+            */
 
-
-          /*
-          ============================================
-          PRODUCT NAME
-          ============================================
-          */
-
-          let productName = "";
-
-
-          if (
-            normalizedCategory === "frames"
-          ) {
-
-            productName =
-              `${item.brand || ""} ${
-                item.frame_name ||
-                item.model ||
-                ""
-              }`;
-
-          } else if (
-            normalizedCategory === "lenses"
-          ) {
-
-            productName =
-              `${item.brand || ""} ${
-                item.lens_type ||
-                ""
-              }`;
-
-          } else if (
-            normalizedCategory ===
-            "contact_lenses"
-          ) {
-
-            productName =
-              `${item.brand || ""} ${
-                item.contact_type ||
-                ""
-              }`;
-
-          } else if (
-            normalizedCategory ===
-            "accessories"
-          ) {
-
-            productName =
-              `${item.brand || ""} ${
-                item.accessory_name ||
-                ""
-              }`;
-
-          } else if (
-            normalizedCategory ===
-            "goggles"
-          ) {
-
-            productName =
-              `${item.brand || ""} ${
-                item.accessory_name ||
-                item.model ||
-                item.frame_name ||
-                ""
-              }`;
-
-          } else {
-
-            productName =
-              `${item.brand || ""} ${
-                item.accessory_name ||
-                item.frame_name ||
-                item.model ||
-                item.lens_type ||
-                item.contact_type ||
-                ""
-              }`;
-          }
+            doc
+              .fontSize(11)
+              .font("Helvetica-Bold")
+              .text(
+                `${index + 1}. ${
+                  item.brand || "-"
+                } ${
+                  item.frame_name ||
+                  item.model ||
+                  ""
+                }`
+              );
 
 
-          /*
-          ============================================
-          PRODUCT TITLE
-          ============================================
-          */
+            doc
+              .fontSize(10)
+              .font("Helvetica");
 
-          doc
-            .fontSize(12)
-            .font("Helvetica-Bold")
-            .text(
-              `${index + 1}. ${
-                productName.trim() ||
-                "Stock Item"
+
+            doc.text(
+              `Brand Name : ${
+                item.brand || "-"
               }`
             );
 
 
-          /*
-          ============================================
-          PRODUCT DETAILS
-          ============================================
-          */
+            doc.text(
+              `Frame Name / Model : ${
+                item.frame_name ||
+                item.model ||
+                "-"
+              }`
+            );
 
-          doc
-            .fontSize(10)
-            .font("Helvetica")
-            .text(`
 
-Category : ${
-              item.category || "-"
-            }
+            doc.text(
+              `Supplier Name : ${
+                item.supplier_name ||
+                "-"
+              }`
+            );
 
-Barcode : ${
-              item.barcode || "-"
-            }
 
-Brand : ${
-              item.brand || "-"
-            }
+            doc.text(
+              `Purchase Price : ₹${
+                Number(
+                  item.purchase_price || 0
+                ).toFixed(2)
+              }`
+            );
 
-Frame Name : ${
-              item.frame_name || "-"
-            }
 
-Model : ${
-              item.model || "-"
-            }
+            doc.text(
+              `Sale Price : ₹${
+                Number(
+                  item.selling_price || 0
+                ).toFixed(2)
+              }`
+            );
 
-Color : ${
-              item.color || "-"
-            }
 
-Size : ${
-              item.size || "-"
-            }
+            doc.text(
+              `Quantity : ${
+                Number(
+                  item.quantity || 0
+                )
+              }`
+            );
 
-Material : ${
-              item.material || "-"
-            }
 
-Gender : ${
-              item.gender || "-"
-            }
+            doc.moveDown(0.8);
 
-Lens Type : ${
-              item.lens_type || "-"
-            }
 
-Power Range : ${
-              item.power_range || "-"
-            }
+            /*
+            ----------------------------------------------
+            SEPARATOR
+            ----------------------------------------------
+            */
 
-Coating : ${
-              item.coating || "-"
-            }
-
-Lens Index : ${
-              item.lens_index || "-"
-            }
-
-Contact Type : ${
-              item.contact_type || "-"
-            }
-
-Power : ${
-              item.power || "-"
-            }
-
-Base Curve : ${
-              item.base_curve || "-"
-            }
-
-Diameter : ${
-              item.diameter || "-"
-            }
-
-Expiry Date : ${
-              item.expiry_date
-                ? new Date(
-                    item.expiry_date
-                  ).toLocaleDateString(
-                    "en-IN"
-                  )
-                : "-"
-            }
-
-Accessory : ${
-              item.accessory_name || "-"
-            }
-
-Purchase Price : ₹${
-              Number(
-                item.purchase_price || 0
-              ).toFixed(2)
-            }
-
-Selling Price : ₹${
-              Number(
-                item.selling_price || 0
-              ).toFixed(2)
-            }
-
-Quantity : ${
-              Number(
-                item.quantity || 0
+            doc
+              .moveTo(
+                40,
+                doc.y
               )
-            }
-
-Created Date : ${
-              item.created_at
-                ? new Date(
-                    item.created_at
-                  ).toLocaleDateString(
-                    "en-IN"
-                  )
-                : "-"
-            }
-
---------------------------------------------------
-`
-            );
+              .lineTo(
+                555,
+                doc.y
+              )
+              .stroke();
 
 
-          totalQuantity +=
-            Number(
-              item.quantity || 0
-            );
-        }
-      );
+            doc.moveDown(0.5);
+
+          }
+        );
+
+      }
 
 
       /*
-      ================================================
-      SUMMARY
-      ================================================
+      ====================================================
+      LENSES PDF
+      ====================================================
       */
+
+      else if (
+        normalizedCategory === "lenses"
+      ) {
+
+        doc
+          .fontSize(14)
+          .font("Helvetica-Bold")
+          .text(
+            "2. Lenses"
+          );
+
+
+        doc.moveDown(0.5);
+
+
+        result.rows.forEach(
+          (
+            item,
+            index
+          ) => {
+
+            /*
+            ----------------------------------------------
+            ITEM TITLE
+            ----------------------------------------------
+            */
+
+            doc
+              .fontSize(11)
+              .font("Helvetica-Bold")
+              .text(
+                `${index + 1}. ${
+                  item.brand || "-"
+                } ${
+                  item.lens_type || ""
+                }`
+              );
+
+
+            doc
+              .fontSize(10)
+              .font("Helvetica");
+
+
+            doc.text(
+              `Brand Name : ${
+                item.brand || "-"
+              }`
+            );
+
+
+            doc.text(
+              `Lens Type : ${
+                item.lens_type || "-"
+              }`
+            );
+
+
+            doc.text(
+              `Coating : ${
+                item.coating || "-"
+              }`
+            );
+
+
+            doc.text(
+              `Quantity : ${
+                Number(
+                  item.quantity || 0
+                )
+              }`
+            );
+
+
+            doc.text(
+              `Purchase Price : ₹${
+                Number(
+                  item.purchase_price || 0
+                ).toFixed(2)
+              }`
+            );
+
+
+            doc.text(
+              `Sale Price : ₹${
+                Number(
+                  item.selling_price || 0
+                ).toFixed(2)
+              }`
+            );
+
+
+            doc.moveDown(0.8);
+
+
+            /*
+            ----------------------------------------------
+            SEPARATOR
+            ----------------------------------------------
+            */
+
+            doc
+              .moveTo(
+                40,
+                doc.y
+              )
+              .lineTo(
+                555,
+                doc.y
+              )
+              .stroke();
+
+
+            doc.moveDown(0.5);
+
+          }
+        );
+
+      }
+
+
+      /*
+      ====================================================
+      OTHER CATEGORY PDF
+      ====================================================
+      */
+
+      else {
+
+        doc
+          .fontSize(14)
+          .font("Helvetica-Bold")
+          .text(
+            category
+              ? `${category}`
+              : "Stock"
+          );
+
+
+        doc.moveDown(0.5);
+
+
+        result.rows.forEach(
+          (
+            item,
+            index
+          ) => {
+
+            const itemName =
+              item.frame_name ||
+              item.model ||
+              item.lens_type ||
+              "";
+
+
+            doc
+              .fontSize(11)
+              .font("Helvetica-Bold")
+              .text(
+                `${index + 1}. ${
+                  item.brand || "-"
+                } ${
+                  itemName
+                }`
+              );
+
+
+            doc
+              .fontSize(10)
+              .font("Helvetica");
+
+
+            doc.text(
+              `Brand Name : ${
+                item.brand || "-"
+              }`
+            );
+
+
+            doc.text(
+              `Item Name : ${
+                itemName || "-"
+              }`
+            );
+
+
+            doc.text(
+              `Supplier Name : ${
+                item.supplier_name ||
+                "-"
+              }`
+            );
+
+
+            doc.text(
+              `Quantity : ${
+                Number(
+                  item.quantity || 0
+                )
+              }`
+            );
+
+
+            doc.text(
+              `Purchase Price : ₹${
+                Number(
+                  item.purchase_price || 0
+                ).toFixed(2)
+              }`
+            );
+
+
+            doc.text(
+              `Sale Price : ₹${
+                Number(
+                  item.selling_price || 0
+                ).toFixed(2)
+              }`
+            );
+
+
+            doc.moveDown(0.8);
+
+
+            doc
+              .moveTo(
+                40,
+                doc.y
+              )
+              .lineTo(
+                555,
+                doc.y
+              )
+              .stroke();
+
+
+            doc.moveDown(0.5);
+
+          }
+        );
+
+      }
+
+
+      /*
+      ====================================================
+      SUMMARY
+      ====================================================
+      */
+
+      const totalQuantity =
+        result.rows.reduce(
+          (
+            total,
+            item
+          ) => {
+
+            return (
+              total +
+              Number(
+                item.quantity || 0
+              )
+            );
+
+          },
+          0
+        );
+
 
       doc.moveDown();
 
 
       doc
-        .fontSize(14)
+        .fontSize(13)
         .font("Helvetica-Bold")
         .text(
-          `Total Records : ${
+          `Total Items : ${
             result.rows.length
           }`
         );
 
 
-      doc
-        .fontSize(14)
-        .font("Helvetica-Bold")
-        .text(
-          `Total Stock Quantity : ${
-            totalQuantity
-          }`
-        );
+      doc.text(
+        `Total Stock Quantity : ${
+          totalQuantity
+        }`
+      );
 
+
+      /*
+      ====================================================
+      FINISH PDF
+      ====================================================
+      */
 
       doc.end();
 
@@ -3345,14 +3897,21 @@ Created Date : ${
         error
       );
 
+
       res.status(500).json({
+
         success: false,
+
         message:
           "Stock PDF generation failed",
+
         error:
           error.message,
+
       });
+
     }
+
   }
 );
 
@@ -3371,8 +3930,10 @@ router.get(
 
     try {
 
-      const { storeCode } =
-        req.params;
+      const {
+        storeCode
+      } = req.params;
+
 
       const {
         category,
@@ -3382,9 +3943,9 @@ router.get(
 
 
       /*
-      ================================================
+      ====================================================
       BUILD QUERY
-      ================================================
+      ====================================================
       */
 
       const {
@@ -3408,9 +3969,24 @@ router.get(
 
 
       /*
-      ================================================
+      ====================================================
+      NORMALIZE CATEGORY
+      ====================================================
+      */
+
+      const normalizedCategory =
+        String(
+          category || ""
+        )
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "_");
+
+
+      /*
+      ====================================================
       CREATE WORKBOOK
-      ================================================
+      ====================================================
       */
 
       const workbook =
@@ -3419,39 +3995,51 @@ router.get(
 
       const sheet =
         workbook.addWorksheet(
-          "Stock Report"
+          "Stock Details"
         );
 
 
       /*
-      ================================================
-      REPORT INFORMATION
-      ================================================
+      ====================================================
+      TITLE
+      ====================================================
       */
 
       sheet.mergeCells(
-        "A1:W1"
+        "A1:F1"
       );
 
 
       sheet.getCell("A1").value =
-        "VISION EYE CARE - STOCK REPORT";
+        "VISION EYE CARE - STOCK DETAILS";
 
 
       sheet.getCell("A1").font = {
+
         bold: true,
+
         size: 16,
+
       };
 
 
       sheet.getCell("A1").alignment = {
+
         horizontal: "center",
+
         vertical: "middle",
+
       };
 
 
+      /*
+      ====================================================
+      REPORT INFORMATION
+      ====================================================
+      */
+
       sheet.mergeCells(
-        "A2:W2"
+        "A2:F2"
       );
 
 
@@ -3460,7 +4048,7 @@ router.get(
 
 
       sheet.mergeCells(
-        "A3:W3"
+        "A3:F3"
       );
 
 
@@ -3474,7 +4062,7 @@ router.get(
 
 
       sheet.mergeCells(
-        "A4:W4"
+        "A4:F4"
       );
 
 
@@ -3485,7 +4073,7 @@ router.get(
 
 
       sheet.mergeCells(
-        "A5:W5"
+        "A5:F5"
       );
 
 
@@ -3496,232 +4084,567 @@ router.get(
 
 
       /*
-      ================================================
-      TABLE HEADER
-      ================================================
+      ====================================================
+      FRAMES
+      ====================================================
       */
 
-      const headers = [
+      if (
+        normalizedCategory === "frames"
+      ) {
 
-        "Barcode",
-        "Category",
-        "Brand",
-
-        "Frame Name",
-        "Model",
-        "Color",
-        "Size",
-        "Material",
-        "Gender",
-
-        "Lens Type",
-        "Power Range",
-        "Coating",
-        "Lens Index",
-
-        "Contact Type",
-        "Power",
-        "Base Curve",
-        "Diameter",
-        "Expiry Date",
-
-        "Accessory Name",
-
-        "Purchase Price",
-        "Selling Price",
-        "Quantity",
-        "Created Date",
-
-      ];
+        sheet.mergeCells(
+          "A6:F6"
+        );
 
 
-      const headerRow =
-        sheet.getRow(7);
+        sheet.getCell("A6").value =
+          "1. Frames";
 
 
-      headers.forEach(
-        (header, index) => {
+        sheet.getCell("A6").font = {
 
-          const cell =
-            headerRow.getCell(
-              index + 1
-            );
+          bold: true,
 
-          cell.value =
-            header;
+          size: 13,
 
-          cell.font = {
-            bold: true,
-          };
+        };
 
-          cell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
 
-        }
-      );
+        /*
+        ----------------------------------------------
+        HEADERS
+        ----------------------------------------------
+        */
+
+        const headers = [
+
+          "Brand Name",
+
+          "Frame Name / Model",
+
+          "Supplier Name",
+
+          "Purchase Price",
+
+          "Sale Price",
+
+          "Quantity",
+
+        ];
+
+
+        const headerRow =
+          sheet.getRow(7);
+
+
+        headers.forEach(
+          (
+            header,
+            index
+          ) => {
+
+            const cell =
+              headerRow.getCell(
+                index + 1
+              );
+
+
+            cell.value =
+              header;
+
+
+            cell.font = {
+              bold: true,
+            };
+
+
+            cell.alignment = {
+
+              horizontal:
+                "center",
+
+              vertical:
+                "middle",
+
+            };
+
+          }
+        );
+
+
+        /*
+        ----------------------------------------------
+        DATA
+        ----------------------------------------------
+        */
+
+        result.rows.forEach(
+          (row) => {
+
+            sheet.addRow([
+
+              row.brand || "",
+
+              row.frame_name ||
+              row.model ||
+              "",
+
+              row.supplier_name ||
+              "",
+
+              Number(
+                row.purchase_price || 0
+              ),
+
+              Number(
+                row.selling_price || 0
+              ),
+
+              Number(
+                row.quantity || 0
+              ),
+
+            ]);
+
+          }
+        );
+
+      }
 
 
       /*
-      ================================================
+      ====================================================
+      LENSES
+      ====================================================
+      */
+
+      else if (
+        normalizedCategory === "lenses"
+      ) {
+
+        sheet.mergeCells(
+          "A6:F6"
+        );
+
+
+        sheet.getCell("A6").value =
+          "2. Lenses";
+
+
+        sheet.getCell("A6").font = {
+
+          bold: true,
+
+          size: 13,
+
+        };
+
+
+        /*
+        ----------------------------------------------
+        HEADERS
+        ----------------------------------------------
+        */
+
+        const headers = [
+
+          "Brand Name",
+
+          "Lens Type",
+
+          "Coating",
+
+          "Quantity",
+
+          "Purchase Price",
+
+          "Sale Price",
+
+        ];
+
+
+        const headerRow =
+          sheet.getRow(7);
+
+
+        headers.forEach(
+          (
+            header,
+            index
+          ) => {
+
+            const cell =
+              headerRow.getCell(
+                index + 1
+              );
+
+
+            cell.value =
+              header;
+
+
+            cell.font = {
+              bold: true,
+            };
+
+
+            cell.alignment = {
+
+              horizontal:
+                "center",
+
+              vertical:
+                "middle",
+
+            };
+
+          }
+        );
+
+
+        /*
+        ----------------------------------------------
+        DATA
+        ----------------------------------------------
+        */
+
+        result.rows.forEach(
+          (row) => {
+
+            sheet.addRow([
+
+              row.brand || "",
+
+              row.lens_type || "",
+
+              row.coating || "",
+
+              Number(
+                row.quantity || 0
+              ),
+
+              Number(
+                row.purchase_price || 0
+              ),
+
+              Number(
+                row.selling_price || 0
+              ),
+
+            ]);
+
+          }
+        );
+
+      }
+
+
+      /*
+      ====================================================
+      OTHER CATEGORIES
+      ====================================================
+      */
+
+      else {
+
+        const headers = [
+
+          "Brand Name",
+
+          "Item Name",
+
+          "Supplier Name",
+
+          "Quantity",
+
+          "Purchase Price",
+
+          "Sale Price",
+
+        ];
+
+
+        const headerRow =
+          sheet.getRow(7);
+
+
+        headers.forEach(
+          (
+            header,
+            index
+          ) => {
+
+            const cell =
+              headerRow.getCell(
+                index + 1
+              );
+
+
+            cell.value =
+              header;
+
+
+            cell.font = {
+              bold: true,
+            };
+
+
+            cell.alignment = {
+
+              horizontal:
+                "center",
+
+              vertical:
+                "middle",
+
+            };
+
+          }
+        );
+
+
+        result.rows.forEach(
+          (row) => {
+
+            sheet.addRow([
+
+              row.brand || "",
+
+              row.frame_name ||
+              row.model ||
+              row.lens_type ||
+              "",
+
+              row.supplier_name ||
+              "",
+
+              Number(
+                row.quantity || 0
+              ),
+
+              Number(
+                row.purchase_price || 0
+              ),
+
+              Number(
+                row.selling_price || 0
+              ),
+
+            ]);
+
+          }
+        );
+
+      }
+
+
+      /*
+      ====================================================
       COLUMN WIDTHS
-      ================================================
+      ====================================================
       */
 
-      const widths = [
+      sheet.getColumn(1).width = 22;
 
-        20,
-        20,
-        20,
+      sheet.getColumn(2).width = 30;
 
-        25,
-        20,
-        15,
-        12,
-        15,
-        15,
+      sheet.getColumn(3).width = 28;
 
-        18,
-        18,
-        18,
-        15,
+      sheet.getColumn(4).width = 18;
 
-        18,
-        12,
-        15,
-        15,
-        18,
+      sheet.getColumn(5).width = 18;
 
-        20,
-
-        18,
-        18,
-        15,
-        20,
-
-      ];
-
-
-      widths.forEach(
-        (width, index) => {
-
-          sheet.getColumn(
-            index + 1
-          ).width = width;
-
-        }
-      );
+      sheet.getColumn(6).width = 15;
 
 
       /*
-      ================================================
-      ADD DATA
-      ================================================
+      ====================================================
+      FORMAT CURRENCY
+      ====================================================
       */
 
-      let totalQuantity = 0;
+      if (
+        normalizedCategory === "frames"
+      ) {
+
+        for (
+          let row = 8;
+          row <= sheet.rowCount;
+          row++
+        ) {
+
+          sheet
+            .getCell(`D${row}`)
+            .numFmt =
+            '₹#,##0.00';
 
 
-      result.rows.forEach(
-        (row) => {
+          sheet
+            .getCell(`E${row}`)
+            .numFmt =
+            '₹#,##0.00';
 
-          sheet.addRow([
+        }
 
-            row.barcode || "",
-
-            row.category || "",
-
-            row.brand || "",
-
-            row.frame_name || "",
-
-            row.model || "",
-
-            row.color || "",
-
-            row.size || "",
-
-            row.material || "",
-
-            row.gender || "",
-
-            row.lens_type || "",
-
-            row.power_range || "",
-
-            row.coating || "",
-
-            row.lens_index || "",
-
-            row.contact_type || "",
-
-            row.power || "",
-
-            row.base_curve || "",
-
-            row.diameter || "",
-
-            row.expiry_date
-              ? new Date(
-                  row.expiry_date
-                ).toLocaleDateString(
-                  "en-IN"
-                )
-              : "",
-
-            row.accessory_name || "",
-
-            Number(
-              row.purchase_price || 0
-            ),
-
-            Number(
-              row.selling_price || 0
-            ),
-
-            Number(
-              row.quantity || 0
-            ),
-
-            row.created_at
-              ? new Date(
-                  row.created_at
-                ).toLocaleDateString(
-                  "en-IN"
-                )
-              : "",
-
-          ]);
+      }
 
 
-          totalQuantity +=
-            Number(
-              row.quantity || 0
+      else if (
+        normalizedCategory === "lenses"
+      ) {
+
+        for (
+          let row = 8;
+          row <= sheet.rowCount;
+          row++
+        ) {
+
+          sheet
+            .getCell(`E${row}`)
+            .numFmt =
+            '₹#,##0.00';
+
+
+          sheet
+            .getCell(`F${row}`)
+            .numFmt =
+            '₹#,##0.00';
+
+        }
+
+      }
+
+
+      else {
+
+        for (
+          let row = 8;
+          row <= sheet.rowCount;
+          row++
+        ) {
+
+          sheet
+            .getCell(`E${row}`)
+            .numFmt =
+            '₹#,##0.00';
+
+
+          sheet
+            .getCell(`F${row}`)
+            .numFmt =
+            '₹#,##0.00';
+
+        }
+
+      }
+
+
+      /*
+      ====================================================
+      TOTAL QUANTITY
+      ====================================================
+      */
+
+      const totalQuantity =
+        result.rows.reduce(
+          (
+            total,
+            row
+          ) => {
+
+            return (
+              total +
+              Number(
+                row.quantity || 0
+              )
             );
 
-        }
-      );
+          },
+          0
+        );
 
-
-      /*
-      ================================================
-      TOTAL
-      ================================================
-      */
 
       sheet.addRow([]);
 
 
-      const totalRow =
-        sheet.addRow({
+      /*
+      ====================================================
+      TOTAL ROW
+      ====================================================
+      */
 
-          barcode: "TOTAL",
+      let totalRow;
 
-          quantity:
+
+      if (
+        normalizedCategory === "frames"
+      ) {
+
+        totalRow =
+          sheet.addRow([
+
+            "TOTAL",
+
+            "",
+
+            "",
+
+            "",
+
+            "",
+
             totalQuantity,
 
-        });
+          ]);
+
+      }
+
+
+      else if (
+        normalizedCategory === "lenses"
+      ) {
+
+        totalRow =
+          sheet.addRow([
+
+            "TOTAL",
+
+            "",
+
+            "",
+
+            totalQuantity,
+
+            "",
+
+            "",
+
+          ]);
+
+      }
+
+
+      else {
+
+        totalRow =
+          sheet.addRow([
+
+            "TOTAL",
+
+            "",
+
+            "",
+
+            totalQuantity,
+
+            "",
+
+            "",
+
+          ]);
+
+      }
 
 
       totalRow.font = {
@@ -3730,25 +4653,43 @@ router.get(
 
 
       /*
-      ================================================
+      ====================================================
       FREEZE HEADER
-      ================================================
+      ====================================================
       */
 
       sheet.views = [
 
         {
+
           state: "frozen",
+
           ySplit: 7,
+
         },
 
       ];
 
 
       /*
-      ================================================
+      ====================================================
+      AUTO FILTER
+      ====================================================
+      */
+
+      sheet.autoFilter = {
+
+        from: "A7",
+
+        to: "F7",
+
+      };
+
+
+      /*
+      ====================================================
       RESPONSE
-      ================================================
+      ====================================================
       */
 
       res.setHeader(
@@ -3777,6 +4718,7 @@ router.get(
         error
       );
 
+
       res.status(500).json({
 
         success: false,
@@ -3788,7 +4730,9 @@ router.get(
           error.message,
 
       });
+
     }
+
   }
 );
 module.exports = router;
