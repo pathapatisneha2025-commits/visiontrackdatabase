@@ -979,6 +979,12 @@ Categories:
 =========================================================
 */
 
+/*
+=========================================================
+CUSTOMER REPORT
+POST /reports/customer
+=========================================================
+*/
 
 router.post("/customer", async (req, res) => {
   try {
@@ -1015,25 +1021,30 @@ router.post("/customer", async (req, res) => {
 
     /*
     =====================================================
-    CUSTOMER REPORT QUERY
+    CUSTOMER REPORT DATA
 
-    We combine customers from:
-    1. Eye Examination
-    2. Optical Orders
-    3. Follow-ups
+    SOURCES:
 
-    Then apply:
-    - Store
-    - Date
-    - Name
-    - Mobile
-    - Category
+    1. eye_exams
+       -> Eye Examination
+
+    2. eye_exams with next_review_date
+       -> Follow-up Customer
+
+    3. optical_orders
+       -> Optical Customer
+
+    IMPORTANT:
+
+    There is NO follow_ups table.
+
+    Follow-up customers are generated from
+    eye_exams.next_review_date.
     =====================================================
     */
 
     const result = await pool.query(
       `
-
       WITH customer_data AS (
 
         /*
@@ -1047,9 +1058,7 @@ router.post("/customer", async (req, res) => {
           e.store_code,
 
           e.patient_id,
-
           e.patient_name,
-
           e.mobile_number AS mobile,
 
           e.created_at AS activity_date,
@@ -1057,20 +1066,64 @@ router.post("/customer", async (req, res) => {
           'Eye Examination' AS customer_category,
 
           NULL::text AS order_no,
-
           NULL::numeric AS total_amount,
-
           NULL::numeric AS advance_paid,
-
           NULL::numeric AS balance_amount,
-
           NULL::text AS order_status,
+          NULL::text AS payment_status,
 
-          NULL::text AS payment_status
+          e.next_review_date AS next_review_date
 
         FROM eye_exams e
 
         WHERE e.store_code = $1
+
+
+        UNION ALL
+
+
+        /*
+        =================================================
+        FOLLOW-UP CUSTOMERS
+        =================================================
+
+        Follow-up is created from the eye examination
+        when next_review_date exists.
+
+        IMPORTANT:
+        activity_date = next_review_date
+
+        Therefore date filtering for Follow-up
+        customers is based on the actual review date.
+        =================================================
+        */
+
+        SELECT
+          e.id,
+          e.store_code,
+
+          e.patient_id,
+          e.patient_name,
+          e.mobile_number AS mobile,
+
+          e.next_review_date AS activity_date,
+
+          'Follow-up Customer' AS customer_category,
+
+          NULL::text AS order_no,
+          NULL::numeric AS total_amount,
+          NULL::numeric AS advance_paid,
+          NULL::numeric AS balance_amount,
+          NULL::text AS order_status,
+          NULL::text AS payment_status,
+
+          e.next_review_date AS next_review_date
+
+        FROM eye_exams e
+
+        WHERE
+          e.store_code = $1
+          AND e.next_review_date IS NOT NULL
 
 
         UNION ALL
@@ -1087,9 +1140,7 @@ router.post("/customer", async (req, res) => {
           o.store_code,
 
           o.patient_id,
-
           o.patient_name,
-
           o.mobile,
 
           o.order_date AS activity_date,
@@ -1097,91 +1148,44 @@ router.post("/customer", async (req, res) => {
           'Optical Customer' AS customer_category,
 
           o.order_no,
-
           o.total_amount,
-
           o.advance_paid,
-
           o.balance_amount,
-
           o.status AS order_status,
+          o.payment_status,
 
-          o.payment_status
+          NULL::timestamp AS next_review_date
 
         FROM optical_orders o
 
         WHERE o.store_code = $1
-
-
-        UNION ALL
-
-
-        /*
-        =================================================
-        FOLLOW-UP CUSTOMERS
-        =================================================
-        */
-
-        SELECT
-          f.id,
-          f.store_code,
-
-          f.patient_id,
-
-          f.patient_name,
-
-          f.mobile_number AS mobile,
-
-          f.created_at AS activity_date,
-
-          'Follow-up Customer' AS customer_category,
-
-          NULL::text AS order_no,
-
-          NULL::numeric AS total_amount,
-
-          NULL::numeric AS advance_paid,
-
-          NULL::numeric AS balance_amount,
-
-          f.status AS order_status,
-
-          NULL::text AS payment_status
-
-        FROM follow_ups f
-
-        WHERE f.store_code = $1
-
       )
 
+
+      /*
+      =====================================================
+      APPLY FILTERS
+      =====================================================
+      */
 
       SELECT
 
         id,
-
         store_code,
-
         patient_id,
-
         patient_name,
-
         mobile,
-
         activity_date,
-
         customer_category,
 
         order_no,
-
         total_amount,
-
         advance_paid,
-
         balance_amount,
-
         order_status,
+        payment_status,
 
-        payment_status
+        next_review_date
 
       FROM customer_data
 
@@ -1189,7 +1193,7 @@ router.post("/customer", async (req, res) => {
 
         /*
         ===============================================
-        DATE FROM
+        FROM DATE
         ===============================================
         */
 
@@ -1205,10 +1209,9 @@ router.post("/customer", async (req, res) => {
 
         /*
         ===============================================
-        DATE TO
+        TO DATE
 
-        +1 day is used so records on the selected
-        ending date are included.
+        +1 day includes the entire ending date.
         ===============================================
         */
 
@@ -1264,7 +1267,6 @@ router.post("/customer", async (req, res) => {
         )
 
       ORDER BY activity_date DESC
-
       `,
       [
         storeCode,
@@ -1275,7 +1277,6 @@ router.post("/customer", async (req, res) => {
         category,
       ]
     );
-
 
     /*
     =====================================================
@@ -1311,7 +1312,6 @@ router.post("/customer", async (req, res) => {
     });
 
   } catch (error) {
-
     console.error(
       "CUSTOMER REPORT ERROR:",
       error
@@ -1326,7 +1326,6 @@ router.post("/customer", async (req, res) => {
 });
 
 
-
 /*
 =========================================================
 CUSTOMER REPORT PDF
@@ -1336,7 +1335,6 @@ POST /reports/customer/pdf
 
 router.post("/customer/pdf", async (req, res) => {
   try {
-
     const {
       storeCode,
       fromDate,
@@ -1346,7 +1344,6 @@ router.post("/customer/pdf", async (req, res) => {
       customerCategory,
     } = req.body;
 
-
     if (!storeCode) {
       return res.status(400).json({
         success: false,
@@ -1354,6 +1351,11 @@ router.post("/customer/pdf", async (req, res) => {
       });
     }
 
+    /*
+    =====================================================
+    NORMALIZE FILTERS
+    =====================================================
+    */
 
     const category =
       customerCategory &&
@@ -1361,10 +1363,14 @@ router.post("/customer/pdf", async (req, res) => {
         ? customerCategory
         : "";
 
+    /*
+    =====================================================
+    GET CUSTOMER DATA
+    =====================================================
+    */
 
     const result = await pool.query(
       `
-
       WITH customer_data AS (
 
         /*
@@ -1379,6 +1385,7 @@ router.post("/customer/pdf", async (req, res) => {
           e.patient_id,
           e.patient_name,
           e.mobile_number AS mobile,
+
           e.created_at AS activity_date,
 
           'Eye Examination'
@@ -1400,11 +1407,71 @@ router.post("/customer/pdf", async (req, res) => {
             AS order_status,
 
           NULL::text
-            AS payment_status
+            AS payment_status,
+
+          e.next_review_date
+            AS next_review_date
 
         FROM eye_exams e
 
         WHERE e.store_code = $1
+
+
+        UNION ALL
+
+
+        /*
+        ===============================================
+        FOLLOW-UP CUSTOMER
+        ===============================================
+
+        Follow-up comes directly from eye_exams.
+
+        Only records with next_review_date are
+        considered follow-ups.
+
+        activity_date = next_review_date
+        ===============================================
+        */
+
+        SELECT
+          e.id,
+          e.store_code,
+          e.patient_id,
+          e.patient_name,
+          e.mobile_number AS mobile,
+
+          e.next_review_date AS activity_date,
+
+          'Follow-up Customer'
+            AS customer_category,
+
+          NULL::text
+            AS order_no,
+
+          NULL::numeric
+            AS total_amount,
+
+          NULL::numeric
+            AS advance_paid,
+
+          NULL::numeric
+            AS balance_amount,
+
+          NULL::text
+            AS order_status,
+
+          NULL::text
+            AS payment_status,
+
+          e.next_review_date
+            AS next_review_date
+
+        FROM eye_exams e
+
+        WHERE
+          e.store_code = $1
+          AND e.next_review_date IS NOT NULL
 
 
         UNION ALL
@@ -1422,52 +1489,25 @@ router.post("/customer/pdf", async (req, res) => {
           o.patient_id,
           o.patient_name,
           o.mobile,
-          o.order_date,
 
-          'Optical Customer',
+          o.order_date AS activity_date,
+
+          'Optical Customer'
+            AS customer_category,
 
           o.order_no,
           o.total_amount,
           o.advance_paid,
           o.balance_amount,
-          o.status,
-          o.payment_status
+          o.status AS order_status,
+          o.payment_status,
+
+          NULL::timestamp
+            AS next_review_date
 
         FROM optical_orders o
 
         WHERE o.store_code = $1
-
-
-        UNION ALL
-
-
-        /*
-        ===============================================
-        FOLLOW-UP CUSTOMER
-        ===============================================
-        */
-
-        SELECT
-          f.id,
-          f.store_code,
-          f.patient_id,
-          f.patient_name,
-          f.mobile_number,
-          f.created_at,
-
-          'Follow-up Customer',
-
-          NULL::text,
-          NULL::numeric,
-          NULL::numeric,
-          NULL::numeric,
-          f.status,
-          NULL::text
-
-        FROM follow_ups f
-
-        WHERE f.store_code = $1
-
       )
 
 
@@ -1476,6 +1516,12 @@ router.post("/customer/pdf", async (req, res) => {
       FROM customer_data
 
       WHERE
+
+        /*
+        ===============================================
+        FROM DATE
+        ===============================================
+        */
 
         (
           $2 = ''
@@ -1486,6 +1532,12 @@ router.post("/customer/pdf", async (req, res) => {
         )
 
         AND
+
+        /*
+        ===============================================
+        TO DATE
+        ===============================================
+        */
 
         (
           $3 = ''
@@ -1499,6 +1551,12 @@ router.post("/customer/pdf", async (req, res) => {
 
         AND
 
+        /*
+        ===============================================
+        CUSTOMER NAME
+        ===============================================
+        */
+
         (
           $4 = ''
           OR patient_name ILIKE
@@ -1506,6 +1564,12 @@ router.post("/customer/pdf", async (req, res) => {
         )
 
         AND
+
+        /*
+        ===============================================
+        MOBILE
+        ===============================================
+        */
 
         (
           $5 = ''
@@ -1515,13 +1579,18 @@ router.post("/customer/pdf", async (req, res) => {
 
         AND
 
+        /*
+        ===============================================
+        CATEGORY
+        ===============================================
+        */
+
         (
           $6 = ''
           OR customer_category = $6
         )
 
       ORDER BY activity_date DESC
-
       `,
       [
         storeCode,
@@ -1533,7 +1602,6 @@ router.post("/customer/pdf", async (req, res) => {
       ]
     );
 
-
     /*
     =====================================================
     COUNTS
@@ -1543,7 +1611,6 @@ router.post("/customer/pdf", async (req, res) => {
     let eyeCount = 0;
     let opticalCount = 0;
     let followupCount = 0;
-
 
     result.rows.forEach((row) => {
 
@@ -1570,7 +1637,6 @@ router.post("/customer/pdf", async (req, res) => {
 
     });
 
-
     /*
     =====================================================
     PDF HEADERS
@@ -1587,15 +1653,12 @@ router.post("/customer/pdf", async (req, res) => {
       `attachment; filename="customer-report-${Date.now()}.pdf"`
     );
 
-
     const doc = new PDFDocument({
       margin: 40,
       size: "A4",
     });
 
-
     doc.pipe(res);
-
 
     /*
     =====================================================
@@ -1613,9 +1676,7 @@ router.post("/customer/pdf", async (req, res) => {
         }
       );
 
-
     doc.moveDown(0.5);
-
 
     doc
       .fontSize(16)
@@ -1626,9 +1687,7 @@ router.post("/customer/pdf", async (req, res) => {
         }
       );
 
-
     doc.moveDown();
-
 
     /*
     =====================================================
@@ -1643,7 +1702,6 @@ router.post("/customer/pdf", async (req, res) => {
         `Store Code : ${storeCode}`
       );
 
-
     doc.text(
       `Date Range : ${
         fromDate || "All"
@@ -1652,13 +1710,11 @@ router.post("/customer/pdf", async (req, res) => {
       }`
     );
 
-
     doc.text(
       `Customer : ${
         customer || "All"
       }`
     );
-
 
     doc.text(
       `Mobile : ${
@@ -1666,16 +1722,13 @@ router.post("/customer/pdf", async (req, res) => {
       }`
     );
 
-
     doc.text(
       `Category : ${
         customerCategory || "All"
       }`
     );
 
-
     doc.moveDown();
-
 
     /*
     =====================================================
@@ -1688,9 +1741,7 @@ router.post("/customer/pdf", async (req, res) => {
       .font("Helvetica-Bold")
       .text("Summary");
 
-
     doc.moveDown(0.3);
-
 
     doc
       .fontSize(10)
@@ -1699,24 +1750,19 @@ router.post("/customer/pdf", async (req, res) => {
         `Total Records : ${result.rows.length}`
       );
 
-
     doc.text(
       `Eye Examinations : ${eyeCount}`
     );
-
 
     doc.text(
       `Optical Customers : ${opticalCount}`
     );
 
-
     doc.text(
       `Follow-up Customers : ${followupCount}`
     );
 
-
     doc.moveDown();
-
 
     /*
     =====================================================
@@ -1731,7 +1777,6 @@ router.post("/customer/pdf", async (req, res) => {
           doc.addPage();
         }
 
-
         doc
           .fontSize(12)
           .font("Helvetica-Bold")
@@ -1741,14 +1786,11 @@ router.post("/customer/pdf", async (req, res) => {
             }`
           );
 
-
         doc.moveDown(0.3);
-
 
         doc
           .fontSize(9)
           .font("Helvetica");
-
 
         const activityDate =
           item.activity_date
@@ -1759,11 +1801,9 @@ router.post("/customer/pdf", async (req, res) => {
               )
             : "-";
 
-
         doc.text(
           `Date : ${activityDate}`
         );
-
 
         doc.text(
           `Patient ID : ${
@@ -1771,13 +1811,11 @@ router.post("/customer/pdf", async (req, res) => {
           }`
         );
 
-
         doc.text(
           `Customer : ${
             item.patient_name || "-"
           }`
         );
-
 
         doc.text(
           `Mobile : ${
@@ -1785,13 +1823,44 @@ router.post("/customer/pdf", async (req, res) => {
           }`
         );
 
-
         doc.text(
           `Category : ${
             item.customer_category || "-"
           }`
         );
 
+        /*
+        ===============================================
+        NEXT REVIEW DATE
+        ===============================================
+        */
+
+        if (
+          item.customer_category ===
+            "Follow-up Customer" &&
+          item.next_review_date
+        ) {
+
+          const nextReviewDate =
+            new Date(
+              item.next_review_date
+            ).toLocaleDateString(
+              "en-IN"
+            );
+
+          doc.text(
+            `Next Review Date : ${
+              nextReviewDate
+            }`
+          );
+
+        }
+
+        /*
+        ===============================================
+        OPTICAL ORDER DETAILS
+        ===============================================
+        */
 
         if (item.order_no) {
 
@@ -1803,10 +1872,8 @@ router.post("/customer/pdf", async (req, res) => {
 
         }
 
-
         if (
-          item.total_amount !==
-          null
+          item.total_amount !== null
         ) {
 
           doc.text(
@@ -1817,10 +1884,8 @@ router.post("/customer/pdf", async (req, res) => {
 
         }
 
-
         if (
-          item.advance_paid !==
-          null
+          item.advance_paid !== null
         ) {
 
           doc.text(
@@ -1831,10 +1896,8 @@ router.post("/customer/pdf", async (req, res) => {
 
         }
 
-
         if (
-          item.balance_amount !==
-          null
+          item.balance_amount !== null
         ) {
 
           doc.text(
@@ -1844,7 +1907,6 @@ router.post("/customer/pdf", async (req, res) => {
           );
 
         }
-
 
         if (item.order_status) {
 
@@ -1856,7 +1918,6 @@ router.post("/customer/pdf", async (req, res) => {
 
         }
 
-
         if (item.payment_status) {
 
           doc.text(
@@ -1867,21 +1928,17 @@ router.post("/customer/pdf", async (req, res) => {
 
         }
 
-
         doc.moveDown(0.5);
-
 
         doc
           .moveTo(40, doc.y)
           .lineTo(555, doc.y)
           .stroke();
 
-
         doc.moveDown(0.7);
 
       }
     );
-
 
     /*
     =====================================================
@@ -1891,14 +1948,12 @@ router.post("/customer/pdf", async (req, res) => {
 
     doc.end();
 
-
   } catch (error) {
 
     console.error(
       "CUSTOMER PDF ERROR:",
       error
     );
-
 
     if (!res.headersSent) {
 
@@ -1913,7 +1968,6 @@ router.post("/customer/pdf", async (req, res) => {
 
   }
 });
-
 
 
 /*
@@ -1936,7 +1990,6 @@ router.post("/customer/excel", async (req, res) => {
       customerCategory,
     } = req.body;
 
-
     if (!storeCode) {
 
       return res.status(400).json({
@@ -1946,13 +1999,11 @@ router.post("/customer/excel", async (req, res) => {
 
     }
 
-
     const category =
       customerCategory &&
       customerCategory !== "All"
         ? customerCategory
         : "";
-
 
     /*
     =====================================================
@@ -1962,8 +2013,13 @@ router.post("/customer/excel", async (req, res) => {
 
     const result = await pool.query(
       `
-
       WITH customer_data AS (
+
+        /*
+        ===============================================
+        EYE EXAMINATION
+        ===============================================
+        */
 
         SELECT
           e.id,
@@ -1971,17 +2027,32 @@ router.post("/customer/excel", async (req, res) => {
           e.patient_id,
           e.patient_name,
           e.mobile_number AS mobile,
+
           e.created_at AS activity_date,
 
           'Eye Examination'
             AS customer_category,
 
-          NULL::text AS order_no,
-          NULL::numeric AS total_amount,
-          NULL::numeric AS advance_paid,
-          NULL::numeric AS balance_amount,
-          NULL::text AS order_status,
-          NULL::text AS payment_status
+          NULL::text
+            AS order_no,
+
+          NULL::numeric
+            AS total_amount,
+
+          NULL::numeric
+            AS advance_paid,
+
+          NULL::numeric
+            AS balance_amount,
+
+          NULL::text
+            AS order_status,
+
+          NULL::text
+            AS payment_status,
+
+          e.next_review_date
+            AS next_review_date
 
         FROM eye_exams e
 
@@ -1991,52 +2062,95 @@ router.post("/customer/excel", async (req, res) => {
         UNION ALL
 
 
+        /*
+        ===============================================
+        FOLLOW-UP CUSTOMER
+        ===============================================
+
+        Follow-up is generated from
+        eye_exams.next_review_date.
+
+        Only non-null next_review_date values
+        become follow-up records.
+
+        activity_date = next_review_date
+        ===============================================
+        */
+
+        SELECT
+          e.id,
+          e.store_code,
+          e.patient_id,
+          e.patient_name,
+          e.mobile_number AS mobile,
+
+          e.next_review_date AS activity_date,
+
+          'Follow-up Customer'
+            AS customer_category,
+
+          NULL::text
+            AS order_no,
+
+          NULL::numeric
+            AS total_amount,
+
+          NULL::numeric
+            AS advance_paid,
+
+          NULL::numeric
+            AS balance_amount,
+
+          NULL::text
+            AS order_status,
+
+          NULL::text
+            AS payment_status,
+
+          e.next_review_date
+            AS next_review_date
+
+        FROM eye_exams e
+
+        WHERE
+          e.store_code = $1
+          AND e.next_review_date IS NOT NULL
+
+
+        UNION ALL
+
+
+        /*
+        ===============================================
+        OPTICAL CUSTOMER
+        ===============================================
+        */
+
         SELECT
           o.id,
           o.store_code,
           o.patient_id,
           o.patient_name,
           o.mobile,
-          o.order_date,
 
-          'Optical Customer',
+          o.order_date AS activity_date,
+
+          'Optical Customer'
+            AS customer_category,
 
           o.order_no,
           o.total_amount,
           o.advance_paid,
           o.balance_amount,
-          o.status,
-          o.payment_status
+          o.status AS order_status,
+          o.payment_status,
+
+          NULL::timestamp
+            AS next_review_date
 
         FROM optical_orders o
 
         WHERE o.store_code = $1
-
-
-        UNION ALL
-
-
-        SELECT
-          f.id,
-          f.store_code,
-          f.patient_id,
-          f.patient_name,
-          f.mobile_number,
-          f.created_at,
-
-          'Follow-up Customer',
-
-          NULL::text,
-          NULL::numeric,
-          NULL::numeric,
-          NULL::numeric,
-          f.status,
-          NULL::text
-
-        FROM follow_ups f
-
-        WHERE f.store_code = $1
-
       )
 
 
@@ -2045,6 +2159,12 @@ router.post("/customer/excel", async (req, res) => {
       FROM customer_data
 
       WHERE
+
+        /*
+        ===============================================
+        FROM DATE
+        ===============================================
+        */
 
         (
           $2 = ''
@@ -2055,6 +2175,12 @@ router.post("/customer/excel", async (req, res) => {
         )
 
         AND
+
+        /*
+        ===============================================
+        TO DATE
+        ===============================================
+        */
 
         (
           $3 = ''
@@ -2068,6 +2194,12 @@ router.post("/customer/excel", async (req, res) => {
 
         AND
 
+        /*
+        ===============================================
+        CUSTOMER NAME
+        ===============================================
+        */
+
         (
           $4 = ''
           OR patient_name ILIKE
@@ -2075,6 +2207,12 @@ router.post("/customer/excel", async (req, res) => {
         )
 
         AND
+
+        /*
+        ===============================================
+        MOBILE
+        ===============================================
+        */
 
         (
           $5 = ''
@@ -2084,13 +2222,18 @@ router.post("/customer/excel", async (req, res) => {
 
         AND
 
+        /*
+        ===============================================
+        CATEGORY
+        ===============================================
+        */
+
         (
           $6 = ''
           OR customer_category = $6
         )
 
       ORDER BY activity_date DESC
-
       `,
       [
         storeCode,
@@ -2102,7 +2245,6 @@ router.post("/customer/excel", async (req, res) => {
       ]
     );
 
-
     /*
     =====================================================
     CREATE WORKBOOK
@@ -2112,12 +2254,10 @@ router.post("/customer/excel", async (req, res) => {
     const workbook =
       new ExcelJS.Workbook();
 
-
     const sheet =
       workbook.addWorksheet(
         "Customer Report"
       );
-
 
     /*
     =====================================================
@@ -2126,25 +2266,21 @@ router.post("/customer/excel", async (req, res) => {
     */
 
     sheet.mergeCells(
-      "A1:M1"
+      "A1:L1"
     );
-
 
     sheet.getCell("A1").value =
       "VISION EYE CARE - CUSTOMER REPORT";
-
 
     sheet.getCell("A1").font = {
       bold: true,
       size: 18,
     };
 
-
     sheet.getCell("A1").alignment = {
       horizontal: "center",
       vertical: "middle",
     };
-
 
     /*
     =====================================================
@@ -2152,13 +2288,12 @@ router.post("/customer/excel", async (req, res) => {
     =====================================================
     */
 
-    sheet.mergeCells("A2:M2");
+    sheet.mergeCells("A2:L2");
 
     sheet.getCell("A2").value =
       `Store Code : ${storeCode}`;
 
-
-    sheet.mergeCells("A3:M3");
+    sheet.mergeCells("A3:L3");
 
     sheet.getCell("A3").value =
       `Date Range : ${
@@ -2167,30 +2302,26 @@ router.post("/customer/excel", async (req, res) => {
         toDate || "All"
       }`;
 
-
-    sheet.mergeCells("A4:M4");
+    sheet.mergeCells("A4:L4");
 
     sheet.getCell("A4").value =
       `Customer : ${
         customer || "All"
       }`;
 
-
-    sheet.mergeCells("A5:M5");
+    sheet.mergeCells("A5:L5");
 
     sheet.getCell("A5").value =
       `Mobile : ${
         patientId || "All"
       }`;
 
-
-    sheet.mergeCells("A6:M6");
+    sheet.mergeCells("A6:L6");
 
     sheet.getCell("A6").value =
       `Category : ${
         customerCategory || "All"
       }`;
-
 
     /*
     =====================================================
@@ -2202,7 +2333,6 @@ router.post("/customer/excel", async (req, res) => {
     let opticalCount = 0;
     let followupCount = 0;
 
-
     result.rows.forEach((row) => {
 
       if (
@@ -2212,14 +2342,12 @@ router.post("/customer/excel", async (req, res) => {
         eyeCount++;
       }
 
-
       if (
         row.customer_category ===
         "Optical Customer"
       ) {
         opticalCount++;
       }
-
 
       if (
         row.customer_category ===
@@ -2230,36 +2358,29 @@ router.post("/customer/excel", async (req, res) => {
 
     });
 
-
     sheet.addRow([]);
-
 
     sheet.addRow([
       "Total Records",
       result.rows.length,
     ]);
 
-
     sheet.addRow([
       "Eye Examinations",
       eyeCount,
     ]);
-
 
     sheet.addRow([
       "Optical Customers",
       opticalCount,
     ]);
 
-
     sheet.addRow([
       "Follow-up Customers",
       followupCount,
     ]);
 
-
     sheet.addRow([]);
-
 
     /*
     =====================================================
@@ -2274,6 +2395,7 @@ router.post("/customer/excel", async (req, res) => {
         "Customer",
         "Mobile",
         "Category",
+        "Next Review Date",
         "Order No",
         "Amount",
         "Advance",
@@ -2282,17 +2404,14 @@ router.post("/customer/excel", async (req, res) => {
         "Payment",
       ]);
 
-
     header.font = {
       bold: true,
     };
-
 
     header.alignment = {
       horizontal: "center",
       vertical: "middle",
     };
-
 
     /*
     =====================================================
@@ -2302,50 +2421,94 @@ router.post("/customer/excel", async (req, res) => {
 
     result.rows.forEach((row) => {
 
-      sheet.addRow([
+      const excelRow =
+        sheet.addRow([
 
-        row.activity_date
-          ? new Date(
-              row.activity_date
-            )
-          : "",
+          row.activity_date
+            ? new Date(
+                row.activity_date
+              )
+            : "",
 
-        row.patient_id || "",
+          row.patient_id || "",
 
-        row.patient_name || "",
+          row.patient_name || "",
 
-        row.mobile || "",
+          row.mobile || "",
 
-        row.customer_category || "",
+          row.customer_category || "",
 
-        row.order_no || "",
+          row.next_review_date
+            ? new Date(
+                row.next_review_date
+              )
+            : "",
 
-        row.total_amount !== null
-          ? Number(
-              row.total_amount
-            )
-          : "",
+          row.order_no || "",
 
-        row.advance_paid !== null
-          ? Number(
-              row.advance_paid
-            )
-          : "",
+          row.total_amount !== null
+            ? Number(
+                row.total_amount
+              )
+            : "",
 
-        row.balance_amount !== null
-          ? Number(
-              row.balance_amount
-            )
-          : "",
+          row.advance_paid !== null
+            ? Number(
+                row.advance_paid
+              )
+            : "",
 
-        row.order_status || "",
+          row.balance_amount !== null
+            ? Number(
+                row.balance_amount
+              )
+            : "",
 
-        row.payment_status || "",
+          row.order_status || "",
 
-      ]);
+          row.payment_status || "",
+        ]);
+
+      /*
+      ===============================================
+      DATE FORMAT
+      ===============================================
+      */
+
+      if (row.activity_date) {
+
+        excelRow.getCell(1).numFmt =
+          "dd-mm-yyyy";
+
+      }
+
+      if (row.next_review_date) {
+
+        excelRow.getCell(6).numFmt =
+          "dd-mm-yyyy";
+
+      }
+
+      /*
+      ===============================================
+      MONEY FORMAT
+
+      H = Amount
+      I = Advance
+      J = Balance
+      ===============================================
+      */
+
+      excelRow.getCell(8).numFmt =
+        '₹#,##0.00';
+
+      excelRow.getCell(9).numFmt =
+        '₹#,##0.00';
+
+      excelRow.getCell(10).numFmt =
+        '₹#,##0.00';
 
     });
-
 
     /*
     =====================================================
@@ -2381,6 +2544,11 @@ router.post("/customer/excel", async (req, res) => {
       },
 
       {
+        key: "next_review_date",
+        width: 20,
+      },
+
+      {
         key: "order_no",
         width: 20,
       },
@@ -2412,38 +2580,6 @@ router.post("/customer/excel", async (req, res) => {
 
     ];
 
-
-    /*
-    =====================================================
-    NUMBER FORMAT
-    =====================================================
-    */
-
-    sheet.eachRow(
-      (row, rowNumber) => {
-
-        /*
-        Data starts after the
-        summary section.
-        */
-
-        if (rowNumber >= 13) {
-
-          row.getCell(7).numFmt =
-            '₹#,##0.00';
-
-          row.getCell(8).numFmt =
-            '₹#,##0.00';
-
-          row.getCell(9).numFmt =
-            '₹#,##0.00';
-
-        }
-
-      }
-    );
-
-
     /*
     =====================================================
     FREEZE TABLE HEADER
@@ -2457,7 +2593,6 @@ router.post("/customer/excel", async (req, res) => {
       },
     ];
 
-
     /*
     =====================================================
     RESPONSE
@@ -2469,17 +2604,14 @@ router.post("/customer/excel", async (req, res) => {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
 
-
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="customer-report-${Date.now()}.xlsx"`
     );
 
-
     await workbook.xlsx.write(res);
 
     res.end();
-
 
   } catch (error) {
 
@@ -2487,7 +2619,6 @@ router.post("/customer/excel", async (req, res) => {
       "CUSTOMER EXCEL ERROR:",
       error
     );
-
 
     if (!res.headersSent) {
 
