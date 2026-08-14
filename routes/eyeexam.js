@@ -494,6 +494,92 @@ message:"Update failed"
 }
 
 });
+// ==========================================
+// COMPLETE FOLLOW-UP
+// ==========================================
+router.put("/followups/complete/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { storeCode } = req.query;
 
+    if (!id || !storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Follow-up ID and storeCode are required"
+      });
+    }
+
+    // First check that the follow-up exists
+    const checkResult = await pool.query(
+      `
+      SELECT
+        id,
+        patient_id,
+        patient_name,
+        mobile_number,
+        next_review_date,
+        status
+      FROM eye_exams
+      WHERE id = $1
+        AND store_code = $2
+      `,
+      [id, storeCode]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Follow-up not found"
+      });
+    }
+
+    const followup = checkResult.rows[0];
+
+    // Already completed
+    if (String(followup.status || "").toLowerCase() === "completed") {
+      return res.json({
+        success: true,
+        message: "Follow-up already completed",
+        followup
+      });
+    }
+
+    // Complete this follow-up
+    const result = await pool.query(
+      `
+      UPDATE eye_exams
+      SET
+        status = 'completed',
+        next_review_date = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND store_code = $2
+      RETURNING
+        id,
+        patient_id,
+        patient_name,
+        mobile_number,
+        next_review_date,
+        status
+      `,
+      [id, storeCode]
+    );
+
+    return res.json({
+      success: true,
+      message: "Follow-up completed successfully",
+      followup: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("COMPLETE FOLLOW-UP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to complete follow-up",
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;
