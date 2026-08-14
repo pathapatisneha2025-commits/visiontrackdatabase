@@ -2634,4 +2634,1161 @@ router.post("/customer/excel", async (req, res) => {
   }
 
 });
+
+/*
+=========================================================
+STOCK REPORT HELPER
+=========================================================
+*/
+
+const buildStockQuery = (storeCode, queryParams = {}) => {
+  const {
+    category,
+    fromDate,
+    toDate,
+  } = queryParams;
+
+  let query = `
+    SELECT
+      id,
+      barcode,
+      category,
+
+      brand,
+
+      frame_name,
+      model,
+      color,
+      size,
+      material,
+      gender,
+
+      lens_type,
+      power_range,
+      coating,
+      lens_index,
+
+      contact_type,
+      power,
+      base_curve,
+      diameter,
+      expiry_date,
+
+      accessory_name,
+
+      purchase_price,
+      selling_price,
+      quantity,
+      created_at
+
+    FROM stock_inventory
+
+    WHERE store_code = $1
+  `;
+
+  const params = [storeCode];
+  let paramIndex = 2;
+
+
+  /*
+  ========================================================
+  CATEGORY FILTER
+
+  Examples:
+
+  Frames          -> frames
+  Lenses          -> lenses
+  Contact Lenses  -> contact_lenses
+  Accessories     -> accessories
+  Goggles         -> goggles
+
+  Case insensitive.
+  Space and underscore are treated the same.
+  ========================================================
+  */
+
+  if (
+    category &&
+    category.trim() !== "" &&
+    category.trim().toLowerCase() !== "all"
+  ) {
+    query += `
+      AND LOWER(
+        REPLACE(
+          TRIM(category),
+          ' ',
+          '_'
+        )
+      ) =
+      LOWER(
+        REPLACE(
+          TRIM($${paramIndex}),
+          ' ',
+          '_'
+        )
+      )
+    `;
+
+    params.push(category.trim());
+    paramIndex++;
+  }
+
+
+  /*
+  ========================================================
+  FROM DATE
+  Frontend format:
+  DD-MM-YYYY
+  ========================================================
+  */
+
+  if (
+    fromDate &&
+    fromDate.trim() !== ""
+  ) {
+    query += `
+      AND DATE(created_at) >=
+      TO_DATE($${paramIndex}, 'DD-MM-YYYY')
+    `;
+
+    params.push(fromDate.trim());
+    paramIndex++;
+  }
+
+
+  /*
+  ========================================================
+  TO DATE
+  Frontend format:
+  DD-MM-YYYY
+  ========================================================
+  */
+
+  if (
+    toDate &&
+    toDate.trim() !== ""
+  ) {
+    query += `
+      AND DATE(created_at) <=
+      TO_DATE($${paramIndex}, 'DD-MM-YYYY')
+    `;
+
+    params.push(toDate.trim());
+    paramIndex++;
+  }
+
+
+  /*
+  ========================================================
+  ORDER
+  ========================================================
+  */
+
+  query += `
+    ORDER BY id DESC
+  `;
+
+
+  return {
+    query,
+    params,
+  };
+};
+
+
+
+/*
+=========================================================
+STOCK REPORT
+GET /reports/stock/:storeCode
+
+Examples:
+
+/reports/stock/STORE001
+
+/reports/stock/STORE001?category=Frames
+
+/reports/stock/STORE001?category=Lenses
+
+/reports/stock/STORE001?category=Contact%20Lenses
+
+/reports/stock/STORE001?category=Accessories
+
+/reports/stock/STORE001?category=Goggles
+
+/reports/stock/STORE001?category=Frames&fromDate=01-08-2026&toDate=14-08-2026
+=========================================================
+*/
+
+router.get(
+  "/stock/:storeCode",
+  async (req, res) => {
+    try {
+      const { storeCode } = req.params;
+
+      const {
+        category,
+        fromDate,
+        toDate,
+      } = req.query;
+
+
+      const {
+        query,
+        params,
+      } = buildStockQuery(
+        storeCode,
+        {
+          category,
+          fromDate,
+          toDate,
+        }
+      );
+
+
+      const result =
+        await pool.query(
+          query,
+          params
+        );
+
+
+      res.json({
+        success: true,
+
+        count:
+          result.rows.length,
+
+        filters: {
+          category:
+            category &&
+            category.trim() !== ""
+              ? category
+              : "All",
+
+          fromDate:
+            fromDate || "",
+
+          toDate:
+            toDate || "",
+        },
+
+        data:
+          result.rows,
+      });
+
+    } catch (error) {
+
+      console.log(
+        "STOCK REPORT ERROR",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: "Stock report error",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+
+/*
+=========================================================
+STOCK REPORT PDF
+GET /reports/stock/:storeCode/pdf
+=========================================================
+*/
+
+router.get(
+  "/stock/:storeCode/pdf",
+  async (req, res) => {
+    try {
+      const { storeCode } = req.params;
+
+      const {
+        category,
+        fromDate,
+        toDate,
+      } = req.query;
+
+
+      /*
+      ================================================
+      BUILD QUERY
+      ================================================
+      */
+
+      const {
+        query,
+        params,
+      } = buildStockQuery(
+        storeCode,
+        {
+          category,
+          fromDate,
+          toDate,
+        }
+      );
+
+
+      const result =
+        await pool.query(
+          query,
+          params
+        );
+
+
+      /*
+      ================================================
+      PDF HEADERS
+      ================================================
+      */
+
+      res.setHeader(
+        "Content-Type",
+        "application/pdf"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=stock-report.pdf"
+      );
+
+
+      const doc =
+        new PDFDocument({
+          margin: 40,
+        });
+
+
+      doc.pipe(res);
+
+
+      /*
+      ================================================
+      TITLE
+      ================================================
+      */
+
+      doc
+        .fontSize(20)
+        .font("Helvetica-Bold")
+        .text(
+          "VISION EYE CARE",
+          {
+            align: "center",
+          }
+        );
+
+
+      doc.moveDown();
+
+
+      doc
+        .fontSize(16)
+        .text(
+          "Stock Report",
+          {
+            align: "center",
+          }
+        );
+
+
+      doc.moveDown(2);
+
+
+      /*
+      ================================================
+      REPORT INFORMATION
+      ================================================
+      */
+
+      doc
+        .fontSize(11)
+        .font("Helvetica")
+        .text(
+          `Store Code : ${storeCode}`
+        );
+
+
+      doc.text(
+        `Category : ${
+          category &&
+          category.trim() !== ""
+            ? category
+            : "All Categories"
+        }`
+      );
+
+
+      doc.text(
+        `From Date : ${
+          fromDate || "All"
+        }`
+      );
+
+
+      doc.text(
+        `To Date : ${
+          toDate || "All"
+        }`
+      );
+
+
+      doc.moveDown();
+
+
+      /*
+      ================================================
+      TOTAL QUANTITY
+      ================================================
+      */
+
+      let totalQuantity = 0;
+
+
+      /*
+      ================================================
+      STOCK RECORDS
+      ================================================
+      */
+
+      result.rows.forEach(
+        (item, index) => {
+
+          doc.moveDown();
+
+
+          /*
+          ============================================
+          NORMALIZE CATEGORY
+          ============================================
+          */
+
+          const normalizedCategory =
+            String(
+              item.category || ""
+            )
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, "_");
+
+
+          /*
+          ============================================
+          PRODUCT NAME
+          ============================================
+          */
+
+          let productName = "";
+
+
+          if (
+            normalizedCategory === "frames"
+          ) {
+
+            productName =
+              `${item.brand || ""} ${
+                item.frame_name ||
+                item.model ||
+                ""
+              }`;
+
+          } else if (
+            normalizedCategory === "lenses"
+          ) {
+
+            productName =
+              `${item.brand || ""} ${
+                item.lens_type ||
+                ""
+              }`;
+
+          } else if (
+            normalizedCategory ===
+            "contact_lenses"
+          ) {
+
+            productName =
+              `${item.brand || ""} ${
+                item.contact_type ||
+                ""
+              }`;
+
+          } else if (
+            normalizedCategory ===
+            "accessories"
+          ) {
+
+            productName =
+              `${item.brand || ""} ${
+                item.accessory_name ||
+                ""
+              }`;
+
+          } else if (
+            normalizedCategory ===
+            "goggles"
+          ) {
+
+            productName =
+              `${item.brand || ""} ${
+                item.accessory_name ||
+                item.model ||
+                item.frame_name ||
+                ""
+              }`;
+
+          } else {
+
+            productName =
+              `${item.brand || ""} ${
+                item.accessory_name ||
+                item.frame_name ||
+                item.model ||
+                item.lens_type ||
+                item.contact_type ||
+                ""
+              }`;
+          }
+
+
+          /*
+          ============================================
+          PRODUCT TITLE
+          ============================================
+          */
+
+          doc
+            .fontSize(12)
+            .font("Helvetica-Bold")
+            .text(
+              `${index + 1}. ${
+                productName.trim() ||
+                "Stock Item"
+              }`
+            );
+
+
+          /*
+          ============================================
+          PRODUCT DETAILS
+          ============================================
+          */
+
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .text(`
+
+Category : ${
+              item.category || "-"
+            }
+
+Barcode : ${
+              item.barcode || "-"
+            }
+
+Brand : ${
+              item.brand || "-"
+            }
+
+Frame Name : ${
+              item.frame_name || "-"
+            }
+
+Model : ${
+              item.model || "-"
+            }
+
+Color : ${
+              item.color || "-"
+            }
+
+Size : ${
+              item.size || "-"
+            }
+
+Material : ${
+              item.material || "-"
+            }
+
+Gender : ${
+              item.gender || "-"
+            }
+
+Lens Type : ${
+              item.lens_type || "-"
+            }
+
+Power Range : ${
+              item.power_range || "-"
+            }
+
+Coating : ${
+              item.coating || "-"
+            }
+
+Lens Index : ${
+              item.lens_index || "-"
+            }
+
+Contact Type : ${
+              item.contact_type || "-"
+            }
+
+Power : ${
+              item.power || "-"
+            }
+
+Base Curve : ${
+              item.base_curve || "-"
+            }
+
+Diameter : ${
+              item.diameter || "-"
+            }
+
+Expiry Date : ${
+              item.expiry_date
+                ? new Date(
+                    item.expiry_date
+                  ).toLocaleDateString(
+                    "en-IN"
+                  )
+                : "-"
+            }
+
+Accessory : ${
+              item.accessory_name || "-"
+            }
+
+Purchase Price : ₹${
+              Number(
+                item.purchase_price || 0
+              ).toFixed(2)
+            }
+
+Selling Price : ₹${
+              Number(
+                item.selling_price || 0
+              ).toFixed(2)
+            }
+
+Quantity : ${
+              Number(
+                item.quantity || 0
+              )
+            }
+
+Created Date : ${
+              item.created_at
+                ? new Date(
+                    item.created_at
+                  ).toLocaleDateString(
+                    "en-IN"
+                  )
+                : "-"
+            }
+
+--------------------------------------------------
+`
+            );
+
+
+          totalQuantity +=
+            Number(
+              item.quantity || 0
+            );
+        }
+      );
+
+
+      /*
+      ================================================
+      SUMMARY
+      ================================================
+      */
+
+      doc.moveDown();
+
+
+      doc
+        .fontSize(14)
+        .font("Helvetica-Bold")
+        .text(
+          `Total Records : ${
+            result.rows.length
+          }`
+        );
+
+
+      doc
+        .fontSize(14)
+        .font("Helvetica-Bold")
+        .text(
+          `Total Stock Quantity : ${
+            totalQuantity
+          }`
+        );
+
+
+      doc.end();
+
+    } catch (error) {
+
+      console.log(
+        "STOCK PDF ERROR",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Stock PDF generation failed",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+
+
+/*
+=========================================================
+STOCK REPORT EXCEL
+GET /reports/stock/:storeCode/excel
+=========================================================
+*/
+
+router.get(
+  "/stock/:storeCode/excel",
+  async (req, res) => {
+
+    try {
+
+      const { storeCode } =
+        req.params;
+
+      const {
+        category,
+        fromDate,
+        toDate,
+      } = req.query;
+
+
+      /*
+      ================================================
+      BUILD QUERY
+      ================================================
+      */
+
+      const {
+        query,
+        params,
+      } = buildStockQuery(
+        storeCode,
+        {
+          category,
+          fromDate,
+          toDate,
+        }
+      );
+
+
+      const result =
+        await pool.query(
+          query,
+          params
+        );
+
+
+      /*
+      ================================================
+      CREATE WORKBOOK
+      ================================================
+      */
+
+      const workbook =
+        new ExcelJS.Workbook();
+
+
+      const sheet =
+        workbook.addWorksheet(
+          "Stock Report"
+        );
+
+
+      /*
+      ================================================
+      REPORT INFORMATION
+      ================================================
+      */
+
+      sheet.mergeCells(
+        "A1:W1"
+      );
+
+
+      sheet.getCell("A1").value =
+        "VISION EYE CARE - STOCK REPORT";
+
+
+      sheet.getCell("A1").font = {
+        bold: true,
+        size: 16,
+      };
+
+
+      sheet.getCell("A1").alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
+
+      sheet.mergeCells(
+        "A2:W2"
+      );
+
+
+      sheet.getCell("A2").value =
+        `Store Code: ${storeCode}`;
+
+
+      sheet.mergeCells(
+        "A3:W3"
+      );
+
+
+      sheet.getCell("A3").value =
+        `Category: ${
+          category &&
+          category.trim() !== ""
+            ? category
+            : "All Categories"
+        }`;
+
+
+      sheet.mergeCells(
+        "A4:W4"
+      );
+
+
+      sheet.getCell("A4").value =
+        `From Date: ${
+          fromDate || "All"
+        }`;
+
+
+      sheet.mergeCells(
+        "A5:W5"
+      );
+
+
+      sheet.getCell("A5").value =
+        `To Date: ${
+          toDate || "All"
+        }`;
+
+
+      /*
+      ================================================
+      TABLE HEADER
+      ================================================
+      */
+
+      const headers = [
+
+        "Barcode",
+        "Category",
+        "Brand",
+
+        "Frame Name",
+        "Model",
+        "Color",
+        "Size",
+        "Material",
+        "Gender",
+
+        "Lens Type",
+        "Power Range",
+        "Coating",
+        "Lens Index",
+
+        "Contact Type",
+        "Power",
+        "Base Curve",
+        "Diameter",
+        "Expiry Date",
+
+        "Accessory Name",
+
+        "Purchase Price",
+        "Selling Price",
+        "Quantity",
+        "Created Date",
+
+      ];
+
+
+      const headerRow =
+        sheet.getRow(7);
+
+
+      headers.forEach(
+        (header, index) => {
+
+          const cell =
+            headerRow.getCell(
+              index + 1
+            );
+
+          cell.value =
+            header;
+
+          cell.font = {
+            bold: true,
+          };
+
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+          };
+
+        }
+      );
+
+
+      /*
+      ================================================
+      COLUMN WIDTHS
+      ================================================
+      */
+
+      const widths = [
+
+        20,
+        20,
+        20,
+
+        25,
+        20,
+        15,
+        12,
+        15,
+        15,
+
+        18,
+        18,
+        18,
+        15,
+
+        18,
+        12,
+        15,
+        15,
+        18,
+
+        20,
+
+        18,
+        18,
+        15,
+        20,
+
+      ];
+
+
+      widths.forEach(
+        (width, index) => {
+
+          sheet.getColumn(
+            index + 1
+          ).width = width;
+
+        }
+      );
+
+
+      /*
+      ================================================
+      ADD DATA
+      ================================================
+      */
+
+      let totalQuantity = 0;
+
+
+      result.rows.forEach(
+        (row) => {
+
+          sheet.addRow([
+
+            row.barcode || "",
+
+            row.category || "",
+
+            row.brand || "",
+
+            row.frame_name || "",
+
+            row.model || "",
+
+            row.color || "",
+
+            row.size || "",
+
+            row.material || "",
+
+            row.gender || "",
+
+            row.lens_type || "",
+
+            row.power_range || "",
+
+            row.coating || "",
+
+            row.lens_index || "",
+
+            row.contact_type || "",
+
+            row.power || "",
+
+            row.base_curve || "",
+
+            row.diameter || "",
+
+            row.expiry_date
+              ? new Date(
+                  row.expiry_date
+                ).toLocaleDateString(
+                  "en-IN"
+                )
+              : "",
+
+            row.accessory_name || "",
+
+            Number(
+              row.purchase_price || 0
+            ),
+
+            Number(
+              row.selling_price || 0
+            ),
+
+            Number(
+              row.quantity || 0
+            ),
+
+            row.created_at
+              ? new Date(
+                  row.created_at
+                ).toLocaleDateString(
+                  "en-IN"
+                )
+              : "",
+
+          ]);
+
+
+          totalQuantity +=
+            Number(
+              row.quantity || 0
+            );
+
+        }
+      );
+
+
+      /*
+      ================================================
+      TOTAL
+      ================================================
+      */
+
+      sheet.addRow([]);
+
+
+      const totalRow =
+        sheet.addRow({
+
+          barcode: "TOTAL",
+
+          quantity:
+            totalQuantity,
+
+        });
+
+
+      totalRow.font = {
+        bold: true,
+      };
+
+
+      /*
+      ================================================
+      FREEZE HEADER
+      ================================================
+      */
+
+      sheet.views = [
+
+        {
+          state: "frozen",
+          ySplit: 7,
+        },
+
+      ];
+
+
+      /*
+      ================================================
+      RESPONSE
+      ================================================
+      */
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=stock-report.xlsx"
+      );
+
+
+      await workbook.xlsx.write(
+        res
+      );
+
+
+      res.end();
+
+    } catch (error) {
+
+      console.log(
+        "STOCK EXCEL ERROR",
+        error
+      );
+
+      res.status(500).json({
+
+        success: false,
+
+        message:
+          "Stock Excel generation failed",
+
+        error:
+          error.message,
+
+      });
+    }
+  }
+);
 module.exports = router;
