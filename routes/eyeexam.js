@@ -497,6 +497,9 @@ message:"Update failed"
 // ==========================================
 // COMPLETE FOLLOW-UP
 // ==========================================
+// ==========================================
+// COMPLETE FOLLOW-UP
+// ==========================================
 router.put("/followups/complete/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -505,11 +508,11 @@ router.put("/followups/complete/:id", async (req, res) => {
     if (!id || !storeCode) {
       return res.status(400).json({
         success: false,
-        message: "Follow-up ID and storeCode are required"
+        message: "Follow-up ID and storeCode are required",
       });
     }
 
-    // First check that the follow-up exists
+    // Check follow-up
     const checkResult = await pool.query(
       `
       SELECT
@@ -517,8 +520,7 @@ router.put("/followups/complete/:id", async (req, res) => {
         patient_id,
         patient_name,
         mobile_number,
-        next_review_date,
-        status
+        next_review_date
       FROM eye_exams
       WHERE id = $1
         AND store_code = $2
@@ -529,29 +531,18 @@ router.put("/followups/complete/:id", async (req, res) => {
     if (checkResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Follow-up not found"
+        message: "Follow-up not found",
       });
     }
 
     const followup = checkResult.rows[0];
 
-    // Already completed
-    if (String(followup.status || "").toLowerCase() === "completed") {
-      return res.json({
-        success: true,
-        message: "Follow-up already completed",
-        followup
-      });
-    }
-
-    // Complete this follow-up
+    // Complete follow-up by removing next review date
     const result = await pool.query(
       `
       UPDATE eye_exams
       SET
-        status = 'completed',
-        next_review_date = NULL,
-        updated_at = CURRENT_TIMESTAMP
+        next_review_date = NULL
       WHERE id = $1
         AND store_code = $2
       RETURNING
@@ -559,8 +550,7 @@ router.put("/followups/complete/:id", async (req, res) => {
         patient_id,
         patient_name,
         mobile_number,
-        next_review_date,
-        status
+        next_review_date
       `,
       [id, storeCode]
     );
@@ -568,7 +558,7 @@ router.put("/followups/complete/:id", async (req, res) => {
     return res.json({
       success: true,
       message: "Follow-up completed successfully",
-      followup: result.rows[0]
+      followup: result.rows[0],
     });
 
   } catch (error) {
@@ -577,7 +567,7 @@ router.put("/followups/complete/:id", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to complete follow-up",
-      error: error.message
+      error: error.message,
     });
   }
 });
