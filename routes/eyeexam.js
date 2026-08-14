@@ -494,12 +494,6 @@ message:"Update failed"
 }
 
 });
-// ==========================================
-// COMPLETE FOLLOW-UP
-// ==========================================
-// ==========================================
-// COMPLETE FOLLOW-UP
-// ==========================================
 router.put("/followups/complete/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -512,7 +506,9 @@ router.put("/followups/complete/:id", async (req, res) => {
       });
     }
 
-    // Check follow-up
+    // ==========================================
+    // CHECK FOLLOW-UP
+    // ==========================================
     const checkResult = await pool.query(
       `
       SELECT
@@ -520,7 +516,8 @@ router.put("/followups/complete/:id", async (req, res) => {
         patient_id,
         patient_name,
         mobile_number,
-        next_review_date
+        next_review_date,
+        followup_status
       FROM eye_exams
       WHERE id = $1
         AND store_code = $2
@@ -537,11 +534,23 @@ router.put("/followups/complete/:id", async (req, res) => {
 
     const followup = checkResult.rows[0];
 
-    // Complete follow-up by removing next review date
+    // Already completed
+    if (followup.followup_status === "completed") {
+      return res.json({
+        success: true,
+        message: "Follow-up is already completed",
+        followup,
+      });
+    }
+
+    // ==========================================
+    // COMPLETE FOLLOW-UP
+    // ==========================================
     const result = await pool.query(
       `
       UPDATE eye_exams
       SET
+        followup_status = 'completed',
         next_review_date = NULL
       WHERE id = $1
         AND store_code = $2
@@ -550,7 +559,8 @@ router.put("/followups/complete/:id", async (req, res) => {
         patient_id,
         patient_name,
         mobile_number,
-        next_review_date
+        next_review_date,
+        followup_status
       `,
       [id, storeCode]
     );
@@ -571,5 +581,4 @@ router.put("/followups/complete/:id", async (req, res) => {
     });
   }
 });
-
 module.exports = router;
