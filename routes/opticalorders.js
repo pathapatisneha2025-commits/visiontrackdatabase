@@ -721,7 +721,67 @@ router.put("/payment/:id", async (req, res) => {
     });
   }
 });
+// ============================================================
+// GET NEXT OPTICAL BILL NUMBER
+// GET /opticalorders/next-bill-number?storeCode=STORE001
+// ============================================================
 
+router.get("/next-bill-number", async (req, res) => {
+  try {
+    const { storeCode } = req.query;
+
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "storeCode is required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT MAX(
+        CASE
+          WHEN bill_number ~ '^[0-9]+$'
+          THEN CAST(bill_number AS INTEGER)
+          ELSE NULL
+        END
+      ) AS max_bill_number
+      FROM optical_orders
+      WHERE store_code = $1
+      `,
+      [storeCode]
+    );
+
+    const maxBillNumber = result.rows[0].max_bill_number;
+
+    // No previous bill exists
+    if (maxBillNumber === null) {
+      return res.json({
+        success: true,
+        previousBillNumber: null,
+        nextBillNumber: null,
+        message: "No previous bill found. Enter first bill number manually.",
+      });
+    }
+
+    const nextBillNumber = Number(maxBillNumber) + 1;
+
+    return res.json({
+      success: true,
+      previousBillNumber: Number(maxBillNumber),
+      nextBillNumber,
+    });
+
+  } catch (error) {
+    console.error("NEXT BILL NUMBER ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get next bill number",
+      error: error.message,
+    });
+  }
+});
 /*
 UPDATE ORDER STATUS
 */
