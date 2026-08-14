@@ -2759,7 +2759,7 @@ const buildStockQuery = (storeCode, queryParams = {}) => {
       created_at,
       updated_at
 
-    FROM stock
+    FROM  stock_inventory
 
     WHERE store_code = $1
   `;
