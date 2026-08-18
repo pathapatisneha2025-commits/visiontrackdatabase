@@ -444,7 +444,232 @@ router.get("/:id", async (req, res) => {
     });
   }
 });
+/*
+UPDATE COMPLETE EYE EXAM
+*/
+router.put("/update/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const {
+      storeCode,
+
+      patient_name,
+      patient_id,
+      mobile_number,
+      age,
+      gender,
+
+      complaint,
+      history_notes,
+
+      od_vision,
+      od_ph,
+
+      os_vision,
+      os_ph,
+
+      right_sph,
+      right_cyl,
+      right_axis,
+
+      left_sph,
+      left_cyl,
+      left_axis,
+
+      pd,
+
+      od_iop,
+      os_iop,
+
+      diagnosis,
+
+      rx,
+
+      notes,
+
+      next_review_date,
+    } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Exam ID required",
+      });
+    }
+
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code required",
+      });
+    }
+
+    // ==========================================
+    // CHECK EXAM EXISTS
+    // ==========================================
+
+    const checkResult = await pool.query(
+      `
+      SELECT id
+      FROM eye_exams
+      WHERE id = $1
+        AND store_code = $2
+      `,
+      [id, storeCode]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Eye examination not found",
+      });
+    }
+
+    // ==========================================
+    // UPDATE EXAM
+    // ==========================================
+
+    const result = await pool.query(
+      `
+      UPDATE eye_exams
+      SET
+
+        patient_name = $1,
+        patient_id = $2,
+        mobile_number = $3,
+        age = $4,
+        gender = $5,
+
+        complaint = $6,
+        history_notes = $7,
+
+        od_vision = $8,
+        od_ph = $9,
+
+        os_vision = $10,
+        os_ph = $11,
+
+        right_sph = $12,
+        right_cyl = $13,
+        right_axis = $14,
+
+        left_sph = $15,
+        left_cyl = $16,
+        left_axis = $17,
+
+        pd = $18,
+
+        od_iop = $19,
+        os_iop = $20,
+
+        diagnosis = $21,
+
+        rx = $22,
+
+        notes = $23,
+
+        next_review_date = $24
+
+      WHERE id = $25
+        AND store_code = $26
+
+      RETURNING *
+      `,
+      [
+
+        patient_name,
+        patient_id,
+        mobile_number,
+        age || null,
+        gender || null,
+
+        complaint,
+        history_notes,
+
+        od_vision,
+        od_ph,
+
+        os_vision,
+        os_ph,
+
+        right_sph,
+        right_cyl,
+        right_axis,
+
+        left_sph,
+        left_cyl,
+        left_axis,
+
+        pd,
+
+        od_iop,
+        os_iop,
+
+        diagnosis,
+
+        rx,
+
+        notes,
+
+        next_review_date,
+
+        id,
+        storeCode,
+      ]
+    );
+
+    // ==========================================
+    // OPTIONAL: UPDATE FOLLOW-UP NOTIFICATION
+    // ==========================================
+
+    if (next_review_date) {
+
+      await pool.query(
+        `
+        UPDATE notifications
+        SET
+          patient_name = $1,
+          mobile_number = $2,
+          message = $3,
+          notification_date = $4
+        WHERE patient_id = $5
+          AND store_code = $6
+          AND title = 'Eye Follow-up Reminder'
+        `,
+        [
+          patient_name,
+          mobile_number,
+          `${patient_name} has an eye review appointment. ${
+            diagnosis || "Eye Checkup"
+          }`,
+          next_review_date,
+          patient_id,
+          storeCode,
+        ]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: "Eye examination updated successfully",
+      exam: result.rows[0],
+    });
+
+  } catch (error) {
+
+    console.error(
+      "UPDATE EYE EXAM ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update eye examination",
+      error: error.message,
+    });
+  }
+});
 
 router.put("/update-review/:patientId", async(req,res)=>{
 
