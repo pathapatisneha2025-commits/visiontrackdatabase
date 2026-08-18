@@ -806,4 +806,154 @@ router.put("/followups/complete/:id", async (req, res) => {
     });
   }
 });
+/*
+DELETE EYE EXAM
+SAVE DELETE HISTORY BEFORE DELETING
+*/
+router.delete("/delete/:id", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+    const { storeCode, deletedBy } = req.body;
+
+    // ==========================================
+    // VALIDATION
+    // ==========================================
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Exam ID is required",
+      });
+    }
+
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code is required",
+      });
+    }
+
+    await client.query("BEGIN");
+
+    // ==========================================
+    // GET EXAM BEFORE DELETE
+    // ==========================================
+
+    const examResult = await client.query(
+      `
+      SELECT
+        id,
+        patient_id,
+        patient_name,
+        mobile_number,
+        store_code
+      FROM eye_exams
+      WHERE id = $1
+        AND store_code = $2
+      FOR UPDATE
+      `,
+      [id, storeCode]
+    );
+
+    if (examResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        success: false,
+        message: "Eye examination not found",
+      });
+    }
+
+    const exam = examResult.rows[0];
+
+    // ==========================================
+    // INSERT INTO DELETE HISTORY
+    // ==========================================
+
+    await client.query(
+      `
+      INSERT INTO delete_history
+      (
+        module,
+        record_id,
+        record_no,
+        customer_name,
+        deleted_by,
+        store_code
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6
+      )
+      `,
+      [
+        "eye_exam",
+        exam.id,
+        exam.patient_id || String(exam.id),
+        exam.patient_name || "",
+        deletedBy || "User",
+        exam.store_code,
+      ]
+    );
+
+    // ==========================================
+    // DELETE EYE EXAM
+    // ==========================================
+
+    const deleteResult = await client.query(
+      `
+      DELETE FROM eye_exams
+      WHERE id = $1
+        AND store_code = $2
+      RETURNING id
+      `,
+      [id, storeCode]
+    );
+
+    if (deleteResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        success: false,
+        message: "Eye examination could not be deleted",
+      });
+    }
+
+    // ==========================================
+    // COMMIT
+    // ==========================================
+
+    await client.query("COMMIT");
+
+    return res.json({
+      success: true,
+      message: "Eye examination deleted successfully",
+      deletedExamId: deleteResult.rows[0].id,
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+
+    console.error(
+      "DELETE EYE EXAM ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete eye examination",
+      error: error.message,
+    });
+
+  } finally {
+    client.release();
+  }
+});
 module.exports = router;
