@@ -7,7 +7,31 @@ const bwipjs = require("bwip-js");
 
 
 /*
- Generate Barcode
+
+/*
+===========================================================
+GENERATE BARCODE
+===========================================================
+
+Sequence:
+
+101
+102
+103
+104
+105
+...
+109
+110
+111
+112
+...
+999
+
+Always exactly 3 digits.
+Starts from 101.
+No 001, 002, 003...
+===========================================================
 */
 
 const generateBarcode = async (storeCode) => {
@@ -17,14 +41,15 @@ const generateBarcode = async (storeCode) => {
       SELECT barcode
       FROM stock_inventory
       WHERE store_code = $1
-        AND barcode ~ '^[0-9]+$'
+        AND barcode ~ '^[0-9]{3}$'
+        AND CAST(barcode AS INTEGER) >= 101
       ORDER BY CAST(barcode AS INTEGER) DESC
       LIMIT 1
       `,
       [storeCode]
     );
 
-    let nextNumber = 1;
+    let nextNumber = 101;
 
     if (result.rows.length > 0) {
       const lastBarcode = parseInt(result.rows[0].barcode, 10);
@@ -34,17 +59,18 @@ const generateBarcode = async (storeCode) => {
       }
     }
 
+    // Maximum barcode is 999
     if (nextNumber > 999) {
       throw new Error("Maximum 3-digit barcode limit reached");
     }
 
-    return String(nextNumber).padStart(3, "0");
+    return String(nextNumber);
+
   } catch (error) {
     console.error("Barcode generation error:", error);
     throw error;
   }
 };
-
 
 
 
