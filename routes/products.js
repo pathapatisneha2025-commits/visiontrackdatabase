@@ -63,7 +63,6 @@ router.post(
   async (req, res) => {
     try {
       const {
-        store_id,
         store_code,
         category_id,
         brand_id,
@@ -76,10 +75,10 @@ router.post(
       // VALIDATION
       // ======================================================
 
-      if (!store_id) {
+      if (!store_code || !String(store_code).trim()) {
         return res.status(400).json({
           success: false,
-          message: "Store ID is required",
+          message: "Store code is required",
         });
       }
 
@@ -105,7 +104,7 @@ router.post(
       }
 
       // ======================================================
-      // CHECK STORE
+      // CHECK STORE USING STORE CODE
       // ======================================================
 
       const storeResult = await pool.query(
@@ -115,15 +114,16 @@ router.post(
           store_code,
           store_name
         FROM stores
-        WHERE id = $1
+        WHERE store_code = $1
+        LIMIT 1
         `,
-        [store_id]
+        [String(store_code).trim()]
       );
 
       if (storeResult.rows.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "Invalid store ID",
+          message: "Invalid store code",
         });
       }
 
@@ -131,11 +131,10 @@ router.post(
 
       // ======================================================
       // USE DATABASE STORE CODE
-      // Don't trust store_code coming from frontend
       // ======================================================
 
       const finalStoreCode =
-        store.store_code || store_code || "";
+        store.store_code;
 
       // ======================================================
       // UPLOAD VARIANT IMAGES
@@ -143,7 +142,10 @@ router.post(
 
       let uploadedImages = {};
 
-      if (req.files && req.files.length > 0) {
+      if (
+        req.files &&
+        req.files.length > 0
+      ) {
         for (const file of req.files) {
           try {
             const result =
@@ -205,7 +207,6 @@ router.post(
                 })
               );
           }
-
         } catch (variantError) {
           console.log(
             "VARIANTS PARSE ERROR",
@@ -222,8 +223,11 @@ router.post(
 
       // ======================================================
       // INSERT PRODUCT
-      // ALWAYS PENDING
       //
+      // Store sends only store_code.
+      // Backend gets store.id internally.
+      //
+      // ALWAYS PENDING
       // Store CANNOT APPROVE ITS OWN PRODUCT
       // ======================================================
 
@@ -272,7 +276,11 @@ router.post(
         RETURNING *
         `,
         [
+          // Backend gets this internally
           store.id,
+
+          // Frontend supplied store_code,
+          // but we use the verified DB value
           finalStoreCode,
 
           category_id,
@@ -297,8 +305,6 @@ router.post(
 
         approval_status: "pending",
 
-        store_id: store.id,
-
         store_code: finalStoreCode,
 
         data: data.rows[0],
@@ -314,6 +320,7 @@ router.post(
         success: false,
         message:
           "Server Error while adding product",
+
         error:
           process.env.NODE_ENV === "development"
             ? error.message
