@@ -3075,75 +3075,45 @@ const getDisplayValue = (row, column) => {
 router.get(
   "/stock/:storeCode",
   async (req, res) => {
+
     try {
-      // =====================================================
-      // GET STORE CODE AND CATEGORY
-      // =====================================================
 
       const { storeCode } = req.params;
       const { category } = req.query;
 
-      // =====================================================
-      // VALIDATE STORE CODE
-      // =====================================================
 
-      if (!storeCode || !storeCode.trim()) {
+      // ======================================================
+      // VALIDATE STORE CODE
+      // ======================================================
+
+      if (!storeCode) {
+
         return res.status(400).json({
+
           success: false,
-          message: "Store code is required",
+
+          message:
+            "Store code is required",
+
         });
+
       }
 
-      // =====================================================
-      // CLEAN STORE CODE
-      // =====================================================
 
-      const cleanStoreCode =
-        storeCode.trim();
-
-      // =====================================================
-      // NORMALIZE CATEGORY
-      // =====================================================
-
-      const reportCategory =
-        normalizeCategory(category);
-
-      console.log(
-        "======================================"
-      );
-
-      console.log(
-        "STOCK REPORT"
-      );
-
-      console.log(
-        "STORE CODE:",
-        cleanStoreCode
-      );
-
-      console.log(
-        "ORIGINAL CATEGORY:",
-        category
-      );
-
-      console.log(
-        "NORMALIZED CATEGORY:",
-        reportCategory
-      );
-
-      // =====================================================
-      // BUILD STOCK QUERY
-      // =====================================================
+      // ======================================================
+      // BUILD QUERY
+      // ======================================================
 
       const {
         sql,
         values,
       } = buildStockQuery(
-        cleanStoreCode,
+        storeCode,
         {
-          category: reportCategory,
+          category,
         }
       );
+
 
       console.log(
         "STOCK REPORT SQL:",
@@ -3155,9 +3125,10 @@ router.get(
         values
       );
 
-      // =====================================================
+
+      // ======================================================
       // EXECUTE QUERY
-      // =====================================================
+      // ======================================================
 
       const result =
         await pool.query(
@@ -3165,37 +3136,152 @@ router.get(
           values
         );
 
+
       const rows =
         result.rows;
 
-      // =====================================================
-      // GET REPORT COLUMNS
-      // =====================================================
+
+      // ======================================================
+      // CATEGORY
+      // ======================================================
+
+      const reportCategory =
+        normalizeCategory(category);
+
+
+      // ======================================================
+      // REPORT COLUMNS
+      // ======================================================
 
       const columns =
         getReportColumns(
           reportCategory
         );
 
-      // =====================================================
-      // RESPONSE
-      // =====================================================
+
+      // ======================================================
+      // SUMMARY
+      // ======================================================
+
+      const totalQuantity =
+        rows.reduce(
+          (sum, row) =>
+            sum +
+            Number(
+              row.quantity || 0
+            ),
+          0
+        );
+
+
+      const totalPurchase =
+        rows.reduce(
+          (sum, row) =>
+            sum +
+            Number(
+              row.quantity || 0
+            ) *
+            Number(
+              row.purchase_price || 0
+            ),
+          0
+        );
+
+
+      const totalSelling =
+        rows.reduce(
+          (sum, row) =>
+            sum +
+            Number(
+              row.quantity || 0
+            ) *
+            Number(
+              row.selling_price || 0
+            ),
+          0
+        );
+
+
+      // ======================================================
+      // FORMAT REPORT DATA
+      // ======================================================
+
+      const reportData =
+        rows.map(
+          (row, index) => {
+
+            const data = {
+
+              sno:
+                index + 1,
+
+              barcode:
+                row.barcode || "",
+
+            };
+
+
+            columns.forEach(
+              (column) => {
+
+                data[column.key] =
+                  getDisplayValue(
+                    row,
+                    column
+                  );
+
+              }
+            );
+
+
+            return data;
+
+          }
+        );
+
+
+      // ======================================================
+      // NORMAL JSON RESPONSE
+      // ======================================================
 
       return res.status(200).json({
+
         success: true,
 
-        count: rows.length,
+        message:
+          "Stock report generated successfully",
 
-        filters: {
-          storeCode: cleanStoreCode,
+        storeCode,
 
-          category:
-            reportCategory || "All",
-        },
+        category:
+          category || "All",
+
+        reportCategory,
 
         columns,
 
-        data: rows,
+        summary: {
+
+          products:
+            rows.length,
+
+          totalQuantity,
+
+          totalPurchase:
+            Number(
+              totalPurchase.toFixed(2)
+            ),
+
+          totalSelling:
+            Number(
+              totalSelling.toFixed(2)
+            ),
+
+        },
+
+        data:
+          reportData,
+
       });
 
     } catch (error) {
@@ -3205,7 +3291,9 @@ router.get(
         error
       );
 
+
       return res.status(500).json({
+
         success: false,
 
         message:
@@ -3213,11 +3301,13 @@ router.get(
 
         error:
           error.message,
+
       });
+
     }
+
   }
 );
-
 // ============================================================
 // STOCK PDF
 //
