@@ -335,40 +335,68 @@ router.post(
 // This returns ALL products.
 // Useful for Admin/Super Admin.
 // ======================================================
-
 router.get(
   "/all",
   async (req, res) => {
     try {
-      const result =
-        await pool.query(
-          `
-          SELECT
-            mp.*,
+      const { store_code } = req.query;
 
-            c.name AS category,
+      // ======================================================
+      // VALIDATION
+      // ======================================================
 
-            b.name AS brand
+      if (!store_code || !String(store_code).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "store_code is required",
+        });
+      }
 
-          FROM master_products mp
+      const storeCode =
+        String(store_code).trim();
 
-          LEFT JOIN categories c
-            ON c.id = mp.category_id
+      // ======================================================
+      // GET PRODUCTS FOR SELECTED STORE
+      // ======================================================
 
-          LEFT JOIN brands b
-            ON b.id = mp.brand_id
+      const result = await pool.query(
+        `
+        SELECT
+          mp.*,
 
-          ORDER BY mp.id DESC
-          `
-        );
+          c.name AS category,
+
+          b.name AS brand
+
+        FROM master_products mp
+
+        LEFT JOIN categories c
+          ON c.id = mp.category_id
+
+        LEFT JOIN brands b
+          ON b.id = mp.brand_id
+
+        WHERE mp.store_code = $1
+
+        ORDER BY mp.id DESC
+        `,
+        [storeCode]
+      );
+
+      // ======================================================
+      // RESPONSE
+      // ======================================================
 
       return res.json({
         success: true,
+        store_code: storeCode,
+        count: result.rows.length,
         data: result.rows,
       });
+
     } catch (error) {
       console.log(
-        "GET ALL PRODUCTS ERROR",
+        "GET STORE PRODUCTS ERROR",
         error
       );
 
@@ -380,7 +408,6 @@ router.get(
     }
   }
 );
-
 // ======================================================
 // GET PENDING PRODUCTS
 // ======================================================
