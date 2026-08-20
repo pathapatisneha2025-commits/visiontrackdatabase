@@ -1,933 +1,1086 @@
-const express=require("express");
-const router=express.Router();
+const express = require("express");
+const router = express.Router();
 
-const pool=require("../db");
+const pool = require("../db");
 
-const multer=require("multer");
+const multer = require("multer");
 
-const {Readable}=require("stream");
+const { Readable } = require("stream");
 
-const cloudinary=require("../cloudinary");
+const cloudinary = require("../cloudinary");
 
+// ======================================================
+// MULTER MEMORY STORAGE
+// ======================================================
 
+const storage = multer.memoryStorage();
 
-// MEMORY STORAGE
-
-const storage=multer.memoryStorage();
-
-const upload=multer({
-storage
+const upload = multer({
+  storage,
 });
 
-
-
-
+// ======================================================
 // CLOUDINARY UPLOAD FUNCTION
+// ======================================================
 
-const uploadToCloudinary=(buffer)=>{
+const uploadToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "master_products",
+      },
 
+      (error, result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(error);
+        }
+      }
+    );
 
-return new Promise((resolve,reject)=>{
+    const readable = new Readable();
 
+    readable._read = () => {};
 
-const stream=cloudinary.uploader.upload_stream(
+    readable.push(buffer);
+    readable.push(null);
 
-{
-folder:"master_products"
-},
-
-(error,result)=>{
-
-
-if(result)
-
-resolve(result);
-
-else
-
-reject(error);
-
-
-}
-
-
-);
-
-
-
-const readable=new Readable();
-
-readable._read=()=>{};
-
-
-readable.push(buffer);
-
-readable.push(null);
-
-
-readable.pipe(stream);
-
-
-
-});
-
-
+    readable.pipe(stream);
+  });
 };
 
-
-
-
-
-// ==========================
-// ADD PRODUCT
-// ==========================
-
-
-// ==========================
+// ======================================================
 // ADD PRODUCT WITH VARIANTS
-// ==========================
+// ======================================================
+// IMPORTANT:
+// Every newly added product is automatically PENDING.
+// It cannot be approved from this API.
+// ======================================================
 
 router.post(
-"/add",
-upload.any(),
-async(req,res)=>{
+  "/add",
+  upload.any(),
+  async (req, res) => {
+    try {
+      const {
+        category_id,
+        brand_id,
+        product_name,
+        description,
+        variants,
+      } = req.body;
 
+      // ==================================================
+      // VALIDATION
+      // ==================================================
 
-try{
+      if (!category_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Category is required",
+        });
+      }
 
+      if (!brand_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Brand is required",
+        });
+      }
 
-const {
+      if (!product_name || !product_name.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Product name is required",
+        });
+      }
 
-category_id,
+      // ==================================================
+      // UPLOAD VARIANT IMAGES
+      // ==================================================
 
-brand_id,
+      let uploadedImages = {};
 
-product_name,
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          try {
+            const result =
+              await uploadToCloudinary(
+                file.buffer
+              );
 
-description,
+            uploadedImages[
+              file.fieldname
+            ] = result.secure_url;
+          } catch (uploadError) {
+            console.log(
+              "CLOUDINARY UPLOAD ERROR",
+              uploadError
+            );
 
-variants
+            return res.status(500).json({
+              success: false,
+              message:
+                "Failed to upload product image",
+            });
+          }
+        }
+      }
 
+      // ==================================================
+      // CONVERT VARIANTS
+      // ==================================================
 
-}=req.body;
+      let finalVariants = [];
 
+      if (variants) {
+        try {
+          const parsedVariants =
+            typeof variants === "string"
+              ? JSON.parse(variants)
+              : variants;
 
+          if (Array.isArray(parsedVariants)) {
+            finalVariants =
+              parsedVariants.map(
+                (v, index) => ({
+                  color:
+                    v.color || "",
 
-// ==========================
-// UPLOAD VARIANT IMAGES
-// ==========================
+                  price:
+                    v.price || "",
 
+                  sku:
+                    v.sku || "",
 
-let uploadedImages={};
+                  image:
+                    uploadedImages[
+                      `variant_images_${index}`
+                    ] ||
+                    v.existingImage ||
+                    "",
+                })
+              );
+          }
+        } catch (variantError) {
+          console.log(
+            "VARIANTS PARSE ERROR",
+            variantError
+          );
 
+          return res.status(400).json({
+            success: false,
+            message:
+              "Invalid variants data",
+          });
+        }
+      }
 
+      // ==================================================
+      // INSERT PRODUCT
+      // ==================================================
+      //
+      // ALWAYS PENDING
+      //
+      // Do not accept approval_status from req.body.
+      // This prevents an admin/store from approving
+      // their own product through the frontend.
+      // ==================================================
 
-if(req.files && req.files.length>0){
+      const data = await pool.query(
+        `
+        INSERT INTO master_products
+        (
+          category_id,
+          brand_id,
+          product_name,
+          description,
+          variants,
+          approval_status,
+          approved_by,
+          approved_at,
+          rejection_reason
+        )
 
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          'pending',
+          NULL,
+          NULL,
+          NULL
+        )
 
-for(const file of req.files){
+        RETURNING *
+        `,
+        [
+          category_id,
+          brand_id,
+          product_name.trim(),
+          description || "",
+          JSON.stringify(finalVariants),
+        ]
+      );
 
+      // ==================================================
+      // RESPONSE
+      // ==================================================
 
-const result =
-await uploadToCloudinary(
-file.buffer
+      return res.status(201).json({
+        success: true,
+
+        message:
+          "Product added successfully and sent to Admin for approval.",
+
+        approval_status: "pending",
+
+        data: data.rows[0],
+      });
+    } catch (error) {
+      console.log(
+        "ADD PRODUCT ERROR",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Server Error while adding product",
+      });
+    }
+  }
 );
 
+// ======================================================
+// GET ALL PRODUCTS
+// ======================================================
+// This returns ALL products.
+// Useful for Admin/Super Admin.
+// ======================================================
 
+router.get(
+  "/all",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            mp.*,
 
-uploadedImages[file.fieldname]=
-result.secure_url;
+            c.name AS category,
 
+            b.name AS brand
 
-}
+          FROM master_products mp
 
+          LEFT JOIN categories c
+            ON c.id = mp.category_id
 
-}
+          LEFT JOIN brands b
+            ON b.id = mp.brand_id
 
+          ORDER BY mp.id DESC
+          `
+        );
 
+      return res.json({
+        success: true,
+        data: result.rows,
+      });
+    } catch (error) {
+      console.log(
+        "GET ALL PRODUCTS ERROR",
+        error
+      );
 
-
-// ==========================
-// CONVERT VARIANTS
-// ==========================
-
-
-let finalVariants=[];
-
-
-if(variants){
-
-
-const parsedVariants =
-JSON.parse(variants);
-
-
-
-finalVariants =
-parsedVariants.map((v,index)=>({
-
-
-color:v.color,
-
-price:v.price,
-
-sku:v.sku,
-
-
-image:
-uploadedImages[`variant_images_${index}`]
-||
-v.existingImage
-||
-""
-
-
-
-}));
-
-
-}
-
-
-
-
-
-// ==========================
-// INSERT PRODUCT
-// ==========================
-
-
-const data = await pool.query(
-
-`
-INSERT INTO master_products
-(
-category_id,
-brand_id,
-product_name,
-description,
-variants
-)
-
-VALUES
-($1,$2,$3,$4,$5)
-
-RETURNING *
-
-`,
-
-[
-
-category_id,
-
-brand_id,
-
-product_name,
-
-description,
-
-JSON.stringify(finalVariants)
-
-]
-
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch products",
+      });
+    }
+  }
 );
 
+// ======================================================
+// GET PENDING PRODUCTS
+// ======================================================
+// Admin/Super Admin approval screen uses this.
+// ======================================================
 
+router.get(
+  "/pending",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            mp.*,
 
-res.json({
+            c.name AS category,
 
-success:true,
+            b.name AS brand
 
-message:"Product Added Successfully",
+          FROM master_products mp
 
-data:data.rows[0]
+          LEFT JOIN categories c
+            ON c.id = mp.category_id
 
-});
+          LEFT JOIN brands b
+            ON b.id = mp.brand_id
 
+          WHERE mp.approval_status = 'pending'
 
+          ORDER BY mp.id DESC
+          `
+        );
 
-}
+      return res.json({
+        success: true,
 
-catch(error){
+        count: result.rows.length,
 
+        data: result.rows,
+      });
+    } catch (error) {
+      console.log(
+        "GET PENDING PRODUCTS ERROR",
+        error
+      );
 
-console.log("ADD PRODUCT ERROR",error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Server Error"
-
-});
-
-
-}
-
-
-});
-
-
-
-
-
-
-// ==========================
-// GET PRODUCTS
-// ==========================
-
-
-router.get("/all",async(req,res)=>{
-
-
-try{
-
-
-const result=await pool.query(
-
-`
-
-SELECT
-
-mp.*,
-
-c.name category,
-
-b.name brand
-
-
-FROM master_products mp
-
-
-LEFT JOIN categories c
-
-ON c.id=mp.category_id
-
-
-LEFT JOIN brands b
-
-ON b.id=mp.brand_id
-
-
-ORDER BY mp.id DESC
-
-
-`
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch pending products",
+      });
+    }
+  }
 );
 
+// ======================================================
+// GET APPROVED PRODUCTS
+// ======================================================
+// Customer/store product listing should use this API.
+// ======================================================
 
+router.get(
+  "/approved",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            mp.*,
 
-res.json({
+            c.name AS category,
 
-success:true,
+            b.name AS brand
 
-data:result.rows
+          FROM master_products mp
 
-});
+          LEFT JOIN categories c
+            ON c.id = mp.category_id
 
+          LEFT JOIN brands b
+            ON b.id = mp.brand_id
 
+          WHERE mp.approval_status = 'approved'
 
-}
+          ORDER BY mp.id DESC
+          `
+        );
 
-catch(error){
+      return res.json({
+        success: true,
+        data: result.rows,
+      });
+    } catch (error) {
+      console.log(
+        "GET APPROVED PRODUCTS ERROR",
+        error
+      );
 
-console.log(error);
-
-res.status(500).json({
-
-success:false
-
-});
-
-
-}
-
-
-});
-
-// ==========================
-// GET PRODUCT BY ID
-// ==========================
-
-router.get("/:id", async(req,res)=>{
-
-
-try{
-
-
-const result = await pool.query(
-
-`
-
-SELECT
-
-mp.*,
-
-c.name category,
-
-b.name brand
-
-
-FROM master_products mp
-
-
-LEFT JOIN categories c
-
-ON c.id=mp.category_id
-
-
-LEFT JOIN brands b
-
-ON b.id=mp.brand_id
-
-
-WHERE mp.id=$1
-
-`,
-
-[req.params.id]
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch approved products",
+      });
+    }
+  }
 );
 
-
-
-if(result.rows.length===0){
-
-return res.json({
-
-success:false,
-
-message:"Product not found"
-
-});
-
-}
-
-
-
-res.json({
-
-success:true,
-
-data:result.rows[0]
-
-});
-
-
-}
-
-catch(error){
-
-console.log(error);
-
-res.status(500).json({
-
-success:false
-
-});
-
-
-}
-
-
-});
-// ==========================
-// UPDATE PRODUCT
-// ==========================
-
-
-// ==========================
-// UPDATE PRODUCT WITH VARIANTS
-// ==========================
+// ======================================================
+// APPROVE / REJECT PRODUCT
+// ======================================================
+// ONE ROUTE FOR BOTH
+//
+// PUT /products/approval/:id
+//
+// Approve:
+// {
+//   "status": "approved",
+//   "approved_by": 1
+// }
+//
+// Reject:
+// {
+//   "status": "rejected",
+//   "approved_by": 1,
+//   "rejection_reason": "Invalid product details"
+// }
+// ======================================================
 
 router.put(
-"/update/:id",
-upload.any(),
-async(req,res)=>{
+  "/approval/:id",
+  async (req, res) => {
+    try {
+      const productId =
+        req.params.id;
 
+      const {
+        status,
+        approved_by,
+        rejection_reason,
+      } = req.body;
 
-try{
+      // ==================================================
+      // VALID STATUS
+      // ==================================================
 
+      if (
+        status !== "approved" &&
+        status !== "rejected"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Status must be approved or rejected",
+        });
+      }
 
-const id=req.params.id;
+      // ==================================================
+      // CHECK PRODUCT
+      // ==================================================
 
+      const existing =
+        await pool.query(
+          `
+          SELECT *
+          FROM master_products
+          WHERE id = $1
+          `,
+          [productId]
+        );
 
-const {
+      if (
+        existing.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Product not found",
+        });
+      }
 
-category_id,
+      // ==================================================
+      // APPROVE
+      // ==================================================
 
-brand_id,
+      if (status === "approved") {
+        const result =
+          await pool.query(
+            `
+            UPDATE master_products
 
-product_name,
+            SET
+              approval_status = 'approved',
 
-description,
+              approved_by = $1,
 
-variants
+              approved_at =
+                CURRENT_TIMESTAMP,
 
+              rejection_reason = NULL
 
-}=req.body;
+            WHERE id = $2
 
+            RETURNING *
+            `,
+            [
+              approved_by || null,
+              productId,
+            ]
+          );
 
+        return res.json({
+          success: true,
 
-// ==========================
-// CHECK PRODUCT
-// ==========================
+          message:
+            "Product approved successfully",
 
+          approval_status:
+            "approved",
 
-const oldProduct = await pool.query(
+          data: result.rows[0],
+        });
+      }
 
-`
-SELECT *
-FROM master_products
-WHERE id=$1
-`,
+      // ==================================================
+      // REJECT
+      // ==================================================
 
-[id]
+      if (status === "rejected") {
+        const result =
+          await pool.query(
+            `
+            UPDATE master_products
 
+            SET
+              approval_status = 'rejected',
+
+              approved_by = NULL,
+
+              approved_at = NULL,
+
+              rejection_reason = $1
+
+            WHERE id = $2
+
+            RETURNING *
+            `,
+            [
+              rejection_reason ||
+                "Rejected by Admin",
+              productId,
+            ]
+          );
+
+        return res.json({
+          success: true,
+
+          message:
+            "Product rejected successfully",
+
+          approval_status:
+            "rejected",
+
+          data: result.rows[0],
+        });
+      }
+    } catch (error) {
+      console.log(
+        "PRODUCT APPROVAL ERROR",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to update product approval status",
+      });
+    }
+  }
 );
 
+// ======================================================
+// GET PRODUCT BY ID
+// ======================================================
 
+router.get(
+  "/:id",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
 
-if(oldProduct.rows.length===0){
+            mp.*,
 
-return res.json({
+            c.name AS category,
 
-success:false,
+            b.name AS brand
 
-message:"Product not found"
+          FROM master_products mp
 
-});
+          LEFT JOIN categories c
+            ON c.id = mp.category_id
 
-}
+          LEFT JOIN brands b
+            ON b.id = mp.brand_id
 
+          WHERE mp.id = $1
+          `,
+          [req.params.id]
+        );
 
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Product not found",
+        });
+      }
 
-// ==========================
-// UPLOAD NEW VARIANT IMAGES
-// ==========================
+      return res.json({
+        success: true,
+        data: result.rows[0],
+      });
+    } catch (error) {
+      console.log(
+        "GET PRODUCT ERROR",
+        error
+      );
 
-
-let uploadedImages={};
-
-
-
-if(req.files && req.files.length>0){
-
-
-for(const file of req.files){
-
-
-const result =
-await uploadToCloudinary(
-file.buffer
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch product",
+      });
+    }
+  }
 );
 
+// ======================================================
+// UPDATE PRODUCT WITH VARIANTS
+// ======================================================
+// IMPORTANT:
+// If an approved product is edited,
+// it goes back to PENDING.
+// Admin must approve it again.
+// ======================================================
 
+router.put(
+  "/update/:id",
+  upload.any(),
+  async (req, res) => {
+    try {
+      const id =
+        req.params.id;
 
-uploadedImages[file.fieldname]=
-result.secure_url;
+      const {
+        category_id,
+        brand_id,
+        product_name,
+        description,
+        variants,
+      } = req.body;
 
+      // ==================================================
+      // CHECK PRODUCT
+      // ==================================================
 
-}
+      const oldProduct =
+        await pool.query(
+          `
+          SELECT *
+          FROM master_products
+          WHERE id = $1
+          `,
+          [id]
+        );
 
+      if (
+        oldProduct.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Product not found",
+        });
+      }
 
-}
+      // ==================================================
+      // VALIDATION
+      // ==================================================
 
+      if (!category_id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Category is required",
+        });
+      }
 
+      if (!brand_id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Brand is required",
+        });
+      }
 
-// ==========================
-// PREPARE VARIANTS
-// ==========================
+      if (
+        !product_name ||
+        !product_name.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Product name is required",
+        });
+      }
 
+      // ==================================================
+      // UPLOAD NEW VARIANT IMAGES
+      // ==================================================
 
-let finalVariants=[];
+      let uploadedImages = {};
 
+      if (
+        req.files &&
+        req.files.length > 0
+      ) {
+        for (const file of req.files) {
+          try {
+            const result =
+              await uploadToCloudinary(
+                file.buffer
+              );
 
-if(variants){
+            uploadedImages[
+              file.fieldname
+            ] =
+              result.secure_url;
+          } catch (uploadError) {
+            console.log(
+              "CLOUDINARY UPDATE IMAGE ERROR",
+              uploadError
+            );
 
+            return res.status(500).json({
+              success: false,
+              message:
+                "Failed to upload product image",
+            });
+          }
+        }
+      }
 
-const parsedVariants =
-JSON.parse(variants);
+      // ==================================================
+      // PREPARE VARIANTS
+      // ==================================================
 
+      let finalVariants = [];
 
+      if (variants) {
+        try {
+          const parsedVariants =
+            typeof variants ===
+            "string"
+              ? JSON.parse(variants)
+              : variants;
 
-finalVariants =
-parsedVariants.map((v,index)=>{
+          if (Array.isArray(parsedVariants)) {
+            finalVariants =
+              parsedVariants.map(
+                (v, index) => ({
+                  color:
+                    v.color || "",
 
+                  price:
+                    v.price || "",
 
-return {
+                  sku:
+                    v.sku || "",
 
-color:v.color,
+                  image:
+                    uploadedImages[
+                      `variant_images_${index}`
+                    ] ||
+                    v.existingImage ||
+                    "",
+                })
+              );
+          }
+        } catch (variantError) {
+          console.log(
+            "UPDATE VARIANTS PARSE ERROR",
+            variantError
+          );
 
-price:v.price,
+          return res.status(400).json({
+            success: false,
+            message:
+              "Invalid variants data",
+          });
+        }
+      }
 
-sku:v.sku,
+      // ==================================================
+      // UPDATE PRODUCT
+      // ==================================================
+      //
+      // IMPORTANT:
+      // Editing always resets approval to pending.
+      // ==================================================
 
+      const updated =
+        await pool.query(
+          `
+          UPDATE master_products
 
-// new image OR old image
+          SET
 
-image:
-uploadedImages[`variant_images_${index}`]
-||
-v.existingImage
-||
-""
+            category_id = $1,
 
-};
+            brand_id = $2,
 
+            product_name = $3,
 
-});
+            description = $4,
 
+            variants = $5,
 
-}
+            approval_status = 'pending',
 
+            approved_by = NULL,
 
+            approved_at = NULL,
 
+            rejection_reason = NULL
 
-// ==========================
-// UPDATE PRODUCT
-// ==========================
+          WHERE id = $6
 
+          RETURNING *
+          `,
+          [
+            category_id,
+            brand_id,
+            product_name.trim(),
+            description || "",
+            JSON.stringify(
+              finalVariants
+            ),
+            id,
+          ]
+        );
 
-const updated =
-await pool.query(
+      return res.json({
+        success: true,
 
-`
-UPDATE master_products
+        message:
+          "Product updated successfully and sent for Admin approval.",
 
-SET
+        approval_status:
+          "pending",
 
-category_id=$1,
+        data: updated.rows[0],
+      });
+    } catch (error) {
+      console.log(
+        "UPDATE PRODUCT ERROR",
+        error
+      );
 
-brand_id=$2,
-
-product_name=$3,
-
-description=$4,
-
-variants=$5
-
-
-WHERE id=$6
-
-
-RETURNING *
-
-`,
-
-[
-
-
-category_id,
-
-brand_id,
-
-product_name,
-
-description,
-
-JSON.stringify(finalVariants),
-
-id
-
-
-]
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Server Error while updating product",
+      });
+    }
+  }
 );
 
-
-
-
-res.json({
-
-success:true,
-
-message:"Product Updated Successfully",
-
-data:updated.rows[0]
-
-});
-
-
-
-}
-
-
-catch(error){
-
-
-console.log(
-"UPDATE PRODUCT ERROR",
-error
-);
-
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Server Error"
-
-});
-
-
-}
-
-
-
-}
-
-);
-// ==========================
+// ======================================================
 // DELETE PRODUCT
-// ==========================
-
+// ======================================================
 
 router.delete(
+  "/delete/:id",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          DELETE FROM master_products
 
-"/delete/:id",
+          WHERE id = $1
 
-async(req,res)=>{
+          RETURNING *
+          `,
+          [req.params.id]
+        );
 
+      if (
+        result.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Product not found",
+        });
+      }
 
-try{
+      return res.json({
+        success: true,
+        message:
+          "Product Deleted",
+      });
+    } catch (error) {
+      console.log(
+        "DELETE PRODUCT ERROR",
+        error
+      );
 
-
-const result =
-await pool.query(
-
-`
-
-DELETE FROM master_products
-
-WHERE id=$1
-
-RETURNING *
-
-`,
-
-[req.params.id]
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete product",
+      });
+    }
+  }
 );
 
+// ======================================================
+// ADD REVIEW
+// ======================================================
 
+router.post(
+  "/addreview",
+  async (req, res) => {
+    try {
+      const {
+        product_id,
+        customer_name,
+        rating,
+        review,
+      } = req.body;
 
-if(result.rows.length===0){
+      if (
+        !product_id ||
+        !customer_name ||
+        !rating ||
+        !review
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "All fields required",
+        });
+      }
 
-return res.json({
+      const result =
+        await pool.query(
+          `
+          INSERT INTO product_reviews
+          (
+            product_id,
+            customer_name,
+            rating,
+            review
+          )
 
-success:false,
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4
+          )
 
-message:"Product not found"
+          RETURNING *
+          `,
+          [
+            product_id,
+            customer_name,
+            rating,
+            review,
+          ]
+        );
 
-});
+      return res.json({
+        success: true,
 
-}
+        message:
+          "Review added successfully",
 
+        data: result.rows[0],
+      });
+    } catch (error) {
+      console.log(
+        "ADD REVIEW ERROR",
+        error
+      );
 
-
-res.json({
-
-success:true,
-
-message:"Product Deleted"
-
-});
-
-
-}
-
-
-catch(error){
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false
-
-});
-
-
-}
-
-
-}
-
+      return res.status(500).json({
+        success: false,
+        message:
+          "Server error",
+      });
+    }
+  }
 );
 
-router.post("/addreview", async(req,res)=>{
-
-
-try{
-
-
-const {
-product_id,
-customer_name,
-rating,
-review
-}=req.body;
-
-
-
-if(
-!product_id ||
-!customer_name ||
-!rating ||
-!review
-){
-
-return res.json({
-
-success:false,
-
-message:"All fields required"
-
-});
-
-}
-
-
-
-
-const result = await pool.query(
-
-`
-INSERT INTO product_reviews
-(
-product_id,
-customer_name,
-rating,
-review
-)
-
-VALUES($1,$2,$3,$4)
-
-RETURNING *
-
-`,
-[
-product_id,
-customer_name,
-rating,
-review
-]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-message:"Review added successfully",
-
-data:result.rows[0]
-
-});
-
-
-
-}
-catch(error){
-
-
-console.log(
-"ADD REVIEW ERROR",
-error
-);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Server error"
-
-});
-
-
-}
-
-
-});
-
-
-
-
-
-
-
-// ===============================
+// ======================================================
 // GET REVIEWS BY PRODUCT
-// ===============================
+// ======================================================
 
-router.get("/reviews/:productId", async(req,res)=>{
+router.get(
+  "/reviews/:productId",
+  async (req, res) => {
+    try {
+      const {
+        productId,
+      } = req.params;
 
-try{
+      const result =
+        await pool.query(
+          `
+          SELECT
 
-const {productId}=req.params;
+            id,
 
+            product_id,
 
-const result = await pool.query(
-`
-SELECT 
-id,
-product_id,
-customer_name,
-rating,
-review,
-created_at
+            customer_name,
 
-FROM product_reviews
+            rating,
 
-WHERE product_id=$1
+            review,
 
-ORDER BY created_at DESC
+            created_at
 
-`,
-[productId]
+          FROM product_reviews
+
+          WHERE product_id = $1
+
+          ORDER BY created_at DESC
+          `,
+          [productId]
+        );
+
+      return res.json({
+        success: true,
+        data: result.rows,
+      });
+    } catch (error) {
+      console.log(
+        "GET REVIEWS ERROR",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch reviews",
+      });
+    }
+  }
 );
 
+// ======================================================
+// EXPORT
+// ======================================================
 
-
-res.json({
-
-success:true,
-
-data:result.rows
-
-});
-
-
-}
-catch(error){
-
-console.log("GET REVIEWS ERROR",error);
-
-
-res.status(500).json({
-
-success:false,
-message:"Failed to fetch reviews"
-
-});
-
-
-}
-
-
-});
-
-
-
-
-module.exports=router;
+module.exports = router;
