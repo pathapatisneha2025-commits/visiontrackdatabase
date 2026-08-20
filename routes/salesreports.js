@@ -3072,49 +3072,12 @@ const getDisplayValue = (row, column) => {
   return String(value);
 
 };
-
-
-// ============================================================
-// GET STOCK JSON
-//
-// GET /reports/stock/:storeCode
-//
-// Examples:
-//
-// /reports/stock/STORE001
-// /reports/stock/STORE001?category=frames
-// /reports/stock/STORE001?category=lenses
-// /reports/stock/STORE001?category=contact_lenses
-// /reports/stock/STORE001?category=accessories
-// ============================================================
-
-// ============================================================
-// GET STOCK REPORT JSON
-//
-// GET /reports/stock/:storeCode
-//
-// Examples:
-// /reports/stock/STORE001
-// /reports/stock/STORE001?category=frames
-// /reports/stock/STORE001?category=lenses
-// /reports/stock/STORE001?category=contact_lenses
-// /reports/stock/STORE001?category=accessories
-// ============================================================
-// ============================================================
-// STOCK REPORT
-//
-// GET /reports/stock/:storeCode
-// Example:
-// /reports/stock/STORE001
-// /reports/stock/STORE001?category=Frames
-// ============================================================
-
 router.get(
   "/stock/:storeCode",
   async (req, res) => {
     try {
       // =====================================================
-      // GET STORE CODE FROM URL
+      // GET STORE CODE AND CATEGORY
       // =====================================================
 
       const { storeCode } = req.params;
@@ -3133,10 +3096,10 @@ router.get(
 
       // =====================================================
       // CLEAN STORE CODE
-      // Same value is used everywhere
       // =====================================================
 
-      const cleanStoreCode = storeCode.trim();
+      const cleanStoreCode =
+        storeCode.trim();
 
       // =====================================================
       // NORMALIZE CATEGORY
@@ -3170,8 +3133,6 @@ router.get(
 
       // =====================================================
       // BUILD STOCK QUERY
-      // IMPORTANT:
-      // Pass SAME store code used by PDF
       // =====================================================
 
       const {
@@ -3256,8 +3217,6 @@ router.get(
     }
   }
 );
-
-
 
 // ============================================================
 // STOCK PDF
