@@ -50,13 +50,12 @@ const uploadToCloudinary = (buffer) => {
   });
 };
 
-// ======================================================
-// ADD PRODUCT WITH VARIANTS
-// ======================================================
-// IMPORTANT:
-// Every newly added product is automatically PENDING.
-// It cannot be approved from this API.
-// ======================================================
+
+
+// ============================================================
+// ADD PRODUCT
+// PRODUCT WILL ALWAYS GO TO SUPER ADMIN AS PENDING
+// ============================================================
 
 router.post(
   "/add",
@@ -64,6 +63,8 @@ router.post(
   async (req, res) => {
     try {
       const {
+        store_id,
+        store_code,
         category_id,
         brand_id,
         product_name,
@@ -71,9 +72,16 @@ router.post(
         variants,
       } = req.body;
 
-      // ==================================================
+      // ======================================================
       // VALIDATION
-      // ==================================================
+      // ======================================================
+
+      if (!store_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Store ID is required",
+        });
+      }
 
       if (!category_id) {
         return res.status(400).json({
@@ -96,9 +104,42 @@ router.post(
         });
       }
 
-      // ==================================================
+      // ======================================================
+      // CHECK STORE
+      // ======================================================
+
+      const storeResult = await pool.query(
+        `
+        SELECT
+          id,
+          store_code,
+          store_name
+        FROM stores
+        WHERE id = $1
+        `,
+        [store_id]
+      );
+
+      if (storeResult.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid store ID",
+        });
+      }
+
+      const store = storeResult.rows[0];
+
+      // ======================================================
+      // USE DATABASE STORE CODE
+      // Don't trust store_code coming from frontend
+      // ======================================================
+
+      const finalStoreCode =
+        store.store_code || store_code || "";
+
+      // ======================================================
       // UPLOAD VARIANT IMAGES
-      // ==================================================
+      // ======================================================
 
       let uploadedImages = {};
 
@@ -113,6 +154,7 @@ router.post(
             uploadedImages[
               file.fieldname
             ] = result.secure_url;
+
           } catch (uploadError) {
             console.log(
               "CLOUDINARY UPLOAD ERROR",
@@ -128,9 +170,9 @@ router.post(
         }
       }
 
-      // ==================================================
+      // ======================================================
       // CONVERT VARIANTS
-      // ==================================================
+      // ======================================================
 
       let finalVariants = [];
 
@@ -163,6 +205,7 @@ router.post(
                 })
               );
           }
+
         } catch (variantError) {
           console.log(
             "VARIANTS PARSE ERROR",
@@ -177,70 +220,90 @@ router.post(
         }
       }
 
-      // ==================================================
+      // ======================================================
       // INSERT PRODUCT
-      // ==================================================
-      //
       // ALWAYS PENDING
       //
-      // Do not accept approval_status from req.body.
-      // This prevents an admin/store from approving
-      // their own product through the frontend.
-      // ==================================================
+      // Store CANNOT APPROVE ITS OWN PRODUCT
+      // ======================================================
 
       const data = await pool.query(
         `
         INSERT INTO master_products
         (
+          store_id,
+          store_code,
+
           category_id,
           brand_id,
+
           product_name,
           description,
           variants,
+
           approval_status,
           approved_by,
           approved_at,
-          rejection_reason
+          rejection_reason,
+
+          created_at
         )
 
         VALUES
         (
           $1,
           $2,
+
           $3,
           $4,
+
           $5,
+          $6,
+          $7,
+
           'pending',
           NULL,
           NULL,
-          NULL
+          NULL,
+
+          CURRENT_TIMESTAMP
         )
 
         RETURNING *
         `,
         [
+          store.id,
+          finalStoreCode,
+
           category_id,
           brand_id,
+
           product_name.trim(),
           description || "",
+
           JSON.stringify(finalVariants),
         ]
       );
 
-      // ==================================================
+      // ======================================================
       // RESPONSE
-      // ==================================================
+      // ======================================================
 
       return res.status(201).json({
         success: true,
 
         message:
-          "Product added successfully and sent to Admin for approval.",
+          "Product added successfully and sent to Super Admin for approval.",
 
         approval_status: "pending",
 
+        store_id: store.id,
+
+        store_code: finalStoreCode,
+
         data: data.rows[0],
       });
+
     } catch (error) {
       console.log(
         "ADD PRODUCT ERROR",
@@ -251,11 +314,14 @@ router.post(
         success: false,
         message:
           "Server Error while adding product",
+        error:
+          process.env.NODE_ENV === "development"
+            ? error.message
+            : undefined,
       });
     }
   }
 );
-
 // ======================================================
 // GET ALL PRODUCTS
 // ======================================================
