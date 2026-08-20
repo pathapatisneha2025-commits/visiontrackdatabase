@@ -3100,35 +3100,43 @@ const getDisplayValue = (row, column) => {
 // /reports/stock/STORE001?category=contact_lenses
 // /reports/stock/STORE001?category=accessories
 // ============================================================
+// ============================================================
+// STOCK REPORT
+//
+// GET /reports/stock/:storeCode
+// Example:
+// /reports/stock/STORE001
+// /reports/stock/STORE001?category=Frames
+// ============================================================
 
 router.get(
   "/stock/:storeCode",
   async (req, res) => {
-
     try {
-
-      const {
-        storeCode
-      } = req.params;
-
-      const {
-        category
-      } = req.query;
-
-
       // =====================================================
-      // VALIDATE STORE
+      // GET STORE CODE FROM URL
       // =====================================================
 
-      if (!storeCode) {
+      const { storeCode } = req.params;
+      const { category } = req.query;
 
+      // =====================================================
+      // VALIDATE STORE CODE
+      // =====================================================
+
+      if (!storeCode || !storeCode.trim()) {
         return res.status(400).json({
           success: false,
           message: "Store code is required",
         });
-
       }
 
+      // =====================================================
+      // CLEAN STORE CODE
+      // Same value is used everywhere
+      // =====================================================
+
+      const cleanStoreCode = storeCode.trim();
 
       // =====================================================
       // NORMALIZE CATEGORY
@@ -3137,6 +3145,18 @@ router.get(
       const reportCategory =
         normalizeCategory(category);
 
+      console.log(
+        "======================================"
+      );
+
+      console.log(
+        "STOCK REPORT"
+      );
+
+      console.log(
+        "STORE CODE:",
+        cleanStoreCode
+      );
 
       console.log(
         "ORIGINAL CATEGORY:",
@@ -3148,24 +3168,21 @@ router.get(
         reportCategory
       );
 
-
       // =====================================================
       // BUILD STOCK QUERY
       // IMPORTANT:
-      // Pass normalized category
+      // Pass SAME store code used by PDF
       // =====================================================
 
       const {
         sql,
         values,
       } = buildStockQuery(
-        storeCode,
+        cleanStoreCode,
         {
-          category:
-            reportCategory,
+          category: reportCategory,
         }
       );
-
 
       console.log(
         "STOCK REPORT SQL:",
@@ -3177,7 +3194,6 @@ router.get(
         values
       );
 
-
       // =====================================================
       // EXECUTE QUERY
       // =====================================================
@@ -3188,14 +3204,11 @@ router.get(
           values
         );
 
-
       const rows =
         result.rows;
 
-
       // =====================================================
       // GET REPORT COLUMNS
-      // Use SAME normalized category
       // =====================================================
 
       const columns =
@@ -3203,34 +3216,26 @@ router.get(
           reportCategory
         );
 
-
       // =====================================================
       // RESPONSE
       // =====================================================
 
       return res.status(200).json({
-
         success: true,
 
-        count:
-          rows.length,
+        count: rows.length,
 
         filters: {
-
-          storeCode,
+          storeCode: cleanStoreCode,
 
           category:
-            reportCategory,
-
+            reportCategory || "All",
         },
 
         columns,
 
-        data:
-          rows,
-
+        data: rows,
       });
-
 
     } catch (error) {
 
@@ -3239,9 +3244,7 @@ router.get(
         error
       );
 
-
       return res.status(500).json({
-
         success: false,
 
         message:
@@ -3249,13 +3252,12 @@ router.get(
 
         error:
           error.message,
-
       });
-
     }
-
   }
 );
+
+
 
 // ============================================================
 // STOCK PDF
