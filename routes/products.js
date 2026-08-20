@@ -329,6 +329,45 @@ router.post(
     }
   }
 );
+router.get("/adminall", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        mp.*,
+
+        c.name AS category,
+
+        b.name AS brand
+
+      FROM master_products mp
+
+      LEFT JOIN categories c
+        ON c.id = mp.category_id
+
+      LEFT JOIN brands b
+        ON b.id = mp.brand_id
+
+      ORDER BY mp.id DESC
+    `);
+
+    return res.json({
+      success: true,
+      data: result.rows,
+    });
+
+  } catch (error) {
+    console.log("GET ALL PRODUCTS ERROR", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch products",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : undefined,
+    });
+  }
+});
 // ======================================================
 // GET ALL PRODUCTS
 // ======================================================
