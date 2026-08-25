@@ -8,76 +8,81 @@ const sendPushNotification =
 /*
 ============================================================
 FOLLOW-UP NOTIFICATION CRON
+============================================================
 
-Runs every minute.
+ONLY SEND WHEN:
 
-RULE:
+notification_date = CURRENT_DATE
+AND
+status = pending
 
-1. notification_date = TODAY
-   AND status = pending
-   -> SEND
+Example:
 
-2. notification_date < TODAY
-   AND status = pending
-   -> DO NOT SEND
+Today = 2026-08-25
 
-3. notification_date > TODAY
-   AND status = pending
-   -> DO NOT SEND
+2026-08-25 + pending -> SEND
+2026-08-24 + pending -> DO NOT SEND
+2026-08-26 + pending -> DO NOT SEND
+2026-09-15 + pending -> DO NOT SEND
+2027-08-10 + pending -> DO NOT SEND
+2026-08-09 + sent    -> DO NOT SEND
 
-4. After successful push
-   -> status = sent
 ============================================================
 */
 
+
 cron.schedule("* * * * *", async () => {
+
+  console.log(
+    "=========================================="
+  );
+
+  console.log(
+    "FOLLOW-UP CRON STARTED"
+  );
 
   try {
 
     /*
     ==========================================================
-    GET TODAY FROM DATABASE
+    GET DATABASE CURRENT DATE
     ==========================================================
     */
 
     const dateResult = await db.query(`
-      SELECT CURRENT_DATE AS today
+      SELECT
+        CURRENT_DATE AS today,
+        CURRENT_TIMESTAMP AS current_time
     `);
 
     const today =
       dateResult.rows[0].today;
 
-    console.log(
-      "========================================"
-    );
+    const currentTime =
+      dateResult.rows[0].current_time;
+
 
     console.log(
-      "FOLLOW-UP CRON RUNNING"
-    );
-
-    console.log(
-      "Today's database date:",
+      "DATABASE TODAY:",
       today
+    );
+
+    console.log(
+      "DATABASE TIME:",
+      currentTime
     );
 
 
     /*
     ==========================================================
-    GET ONLY TODAY'S PENDING NOTIFICATIONS
+    VERY IMPORTANT
 
-    IMPORTANT:
+    ONLY FETCH:
 
-    notification_date::date = CURRENT_DATE
+    notification_date = TODAY
+    status = pending
 
-    This means:
-
-    2026-08-25 -> SEND
-
-    2026-08-24 -> DO NOT SEND
-
-    2026-08-26 -> DO NOT SEND
-
-    And status must be pending.
+    Nothing else can enter this result.
     ==========================================================
     */
 
@@ -102,31 +107,52 @@ cron.schedule("* * * * *", async () => {
 
         AND status = 'pending'
 
-      ORDER BY notification_date ASC
+      ORDER BY id ASC
 
     `);
 
 
     console.log(
-      "Today's pending notifications:",
-      result.rowCount
+      "TODAY'S NOTIFICATIONS FOUND:",
+      result.rows.length
     );
 
 
     /*
     ==========================================================
-    IF NOTHING TO SEND
+    SHOW EXACTLY WHAT WILL BE SENT
     ==========================================================
     */
 
-    if (result.rows.length === 0) {
+    for (
+      const item of result.rows
+    ) {
 
       console.log(
-        "No notifications scheduled for today."
+        "WILL SEND:",
+        {
+          id: item.id,
+          patient: item.patient_name,
+          notification_date: item.notification_date,
+          status: item.status
+        }
       );
 
+    }
+
+
+    /*
+    ==========================================================
+    NOTHING TO SEND
+    ==========================================================
+    */
+
+    if (
+      result.rows.length === 0
+    ) {
+
       console.log(
-        "========================================"
+        "NO FOLLOW-UP NOTIFICATIONS FOR TODAY"
       );
 
       return;
@@ -136,7 +162,7 @@ cron.schedule("* * * * *", async () => {
 
     /*
     ==========================================================
-    PROCESS EACH NOTIFICATION
+    SEND TODAY'S NOTIFICATIONS
     ==========================================================
     */
 
@@ -144,247 +170,226 @@ cron.schedule("* * * * *", async () => {
       const item of result.rows
     ) {
 
-      try {
+      console.log(
+        "------------------------------------------"
+      );
+
+      console.log(
+        "PROCESSING ID:",
+        item.id
+      );
+
+      console.log(
+        "PATIENT:",
+        item.patient_name
+      );
+
+      console.log(
+        "DATE:",
+        item.notification_date
+      );
+
+      console.log(
+        "STATUS:",
+        item.status
+      );
+
+
+      /*
+      ========================================================
+      EXTRA DATABASE-SIDE SAFETY CHECK
+
+      This notification MUST still be:
+
+      TODAY
+      AND
+      PENDING
+      ========================================================
+      */
+
+      const verifyResult = await db.query(
+
+        `
+
+        SELECT id
+
+        FROM notifications
+
+        WHERE
+          id = $1
+
+          AND notification_date IS NOT NULL
+
+          AND notification_date::date = CURRENT_DATE
+
+          AND status = 'pending'
+
+        `,
+
+        [
+          item.id
+        ]
+
+      );
+
+
+      /*
+      ========================================================
+      IF VERIFICATION FAILS
+
+      DO NOT SEND
+      ========================================================
+      */
+
+      if (
+        verifyResult.rows.length === 0
+      ) {
 
         console.log(
-          "----------------------------------------"
-        );
-
-        console.log(
-          "Notification ID:",
+          "SAFETY CHECK FAILED - NOT SENDING:",
           item.id
         );
 
-        console.log(
-          "Patient:",
-          item.patient_name
-        );
+        continue;
 
-        console.log(
-          "Notification date:",
-          item.notification_date
-        );
-
-        console.log(
-          "Status:",
-          item.status
-        );
+      }
 
 
-        /*
-        ========================================================
-        EXTRA SAFETY CHECK
+      /*
+      ========================================================
+      GET STORE TOKENS
+      ========================================================
+      */
 
-        Even though SQL already checks the date,
-        check it again before sending.
+      const tokenResult =
+        await db.query(
 
-        This guarantees that an old notification
-        can NEVER accidentally be sent.
-        ========================================================
-        */
+          `
 
-        const notificationDate =
-          new Date(item.notification_date);
+          SELECT expo_token
 
-        const currentDate =
-          new Date(today);
+          FROM store_push_tokens
 
+          WHERE
+            store_code = $1
 
-        notificationDate.setHours(
-          0,
-          0,
-          0,
-          0
-        );
+          `,
 
-        currentDate.setHours(
-          0,
-          0,
-          0,
-          0
-        );
-
-
-        /*
-        ========================================================
-        NOT TODAY
-
-        DO NOT SEND
-        ========================================================
-        */
-
-        if (
-          notificationDate.getTime() !==
-          currentDate.getTime()
-        ) {
-
-          console.log(
-            "SKIPPED - Notification date is not today:",
-            item.notification_date
-          );
-
-          continue;
-
-        }
-
-
-        /*
-        ========================================================
-        STATUS CHECK
-        ========================================================
-        */
-
-        if (
-          item.status !== "pending"
-        ) {
-
-          console.log(
-            "SKIPPED - Notification already processed:",
-            item.status
-          );
-
-          continue;
-
-        }
-
-
-        /*
-        ========================================================
-        GET STORE EXPO TOKENS
-        ========================================================
-        */
-
-        const tokenResult =
-          await db.query(
-
-            `
-
-            SELECT expo_token
-
-            FROM store_push_tokens
-
-            WHERE store_code = $1
-
-            `,
-
-            [
-              item.store_code
-            ]
-
-          );
-
-
-        /*
-        ========================================================
-        NO TOKEN
-        ========================================================
-        */
-
-        if (
-          tokenResult.rows.length === 0
-        ) {
-
-          console.log(
-            "No Expo token found for store:",
+          [
             item.store_code
-          );
+          ]
+
+        );
+
+
+      if (
+        tokenResult.rows.length === 0
+      ) {
+
+        console.log(
+          "NO EXPO TOKEN:",
+          item.store_code
+        );
+
+        continue;
+
+      }
+
+
+      let notificationSent =
+        false;
+
+
+      /*
+      ========================================================
+      SEND PUSH
+      ========================================================
+      */
+
+      for (
+        const tokenRow
+        of tokenResult.rows
+      ) {
+
+        if (
+          !tokenRow.expo_token
+        ) {
 
           continue;
 
         }
 
 
-        /*
-        ========================================================
-        SEND TO ALL STORE TOKENS
-        ========================================================
-        */
+        try {
 
-        let notificationSent =
-          false;
+          console.log(
+            "SENDING PUSH:",
+            item.id,
+            item.patient_name
+          );
 
 
-        for (
-          const tokenRow
-          of tokenResult.rows
+          await sendPushNotification(
+
+            tokenRow.expo_token,
+
+            item.title,
+
+            `${item.patient_name} - ${item.message}`,
+
+            {
+              notificationId:
+                item.id,
+
+              patientId:
+                item.patient_id
+            }
+
+          );
+
+
+          notificationSent =
+            true;
+
+
+          console.log(
+            "PUSH SUCCESS:",
+            item.id
+          );
+
+
+        } catch (
+          pushError
         ) {
 
-          if (
-            !tokenRow.expo_token
-          ) {
-
-            console.log(
-              "Empty Expo token - skipped"
-            );
-
-            continue;
-
-          }
-
-
-          try {
-
-            /*
-            ====================================================
-            SEND PUSH
-            ====================================================
-            */
-
-            await sendPushNotification(
-
-              tokenRow.expo_token,
-
-              item.title,
-
-              `${item.patient_name} - ${item.message}`,
-
-              {
-
-                notificationId:
-                  item.id,
-
-                patientId:
-                  item.patient_id
-
-              }
-
-            );
-
-
-            notificationSent =
-              true;
-
-
-            console.log(
-              "Push notification sent:",
-              item.patient_name
-            );
-
-
-          } catch (
+          console.log(
+            "PUSH ERROR:",
             pushError
-          ) {
-
-            console.log(
-              "PUSH ERROR:",
-              pushError
-            );
-
-          }
+          );
 
         }
 
+      }
 
-        /*
-        ========================================================
-        MARK AS SENT ONLY IF PUSH WAS SUCCESSFUL
-        ========================================================
-        */
 
-        if (
-          notificationSent
-        ) {
+      /*
+      ========================================================
+      MARK SENT
 
+      AGAIN CHECK:
+
+      ID
+      TODAY
+      PENDING
+
+      ========================================================
+      */
+
+      if (
+        notificationSent
+      ) {
+
+        const updateResult =
           await db.query(
 
             `
@@ -397,9 +402,13 @@ cron.schedule("* * * * *", async () => {
             WHERE
               id = $1
 
-              AND status = 'pending'
+              AND notification_date IS NOT NULL
 
               AND notification_date::date = CURRENT_DATE
+
+              AND status = 'pending'
+
+            RETURNING id, status
 
             `,
 
@@ -410,36 +419,27 @@ cron.schedule("* * * * *", async () => {
           );
 
 
+        if (
+          updateResult.rows.length > 0
+        ) {
+
           console.log(
-            "Notification marked as SENT:",
-            item.patient_name
+            "MARKED SENT:",
+            item.id
           );
 
         } else {
 
           console.log(
-            "Notification was not sent. Keeping status as pending."
+            "NOT MARKED - SAFETY CONDITION FAILED:",
+            item.id
           );
 
         }
 
-      } catch (
-        notificationError
-      ) {
-
-        console.log(
-          "NOTIFICATION ERROR:",
-          notificationError
-        );
-
       }
 
     }
-
-
-    console.log(
-      "========================================"
-    );
 
 
   } catch (
@@ -447,10 +447,19 @@ cron.schedule("* * * * *", async () => {
   ) {
 
     console.log(
-      "CRON ERROR:",
+      "FOLLOW-UP CRON ERROR:",
       error
     );
 
   }
+
+
+  console.log(
+    "FOLLOW-UP CRON FINISHED"
+  );
+
+  console.log(
+    "=========================================="
+  );
 
 });
