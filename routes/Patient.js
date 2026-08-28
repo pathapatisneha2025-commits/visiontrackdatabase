@@ -364,132 +364,146 @@ CREATE PATIENT
 */
 
 
-router.post("/add",async(req,res)=>{
+router.post("/add", async (req, res) => {
+  try {
+    const {
+      role,
+      storeCode,
+      name,
+      mobile,
+      age,
+      gender,
+      address
+    } = req.body;
 
-try{
+    // ==========================================
+    // VALIDATION
+    // ==========================================
 
+    if (!name || !mobile) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and mobile are required"
+      });
+    }
 
-const {
+    // ==========================================
+    // SUPER ADMIN
+    // ==========================================
 
-storeCode,
-name,
-mobile,
-age,
-gender,
-address
+    if (role === "superadmin") {
 
-}=req.body;
+      // Generate global patient ID
+      const countResult = await pool.query(`
+        SELECT COUNT(*) 
+        FROM patients
+      `);
 
+      const nextNumber =
+        Number(countResult.rows[0].count) + 1;
 
+      const patientId =
+        "PT" + String(nextNumber).padStart(3, "0");
 
-if(!storeCode){
+      const result = await pool.query(
+        `
+        INSERT INTO patients
+        (
+          patient_id,
+          name,
+          mobile,
+          age,
+          gender,
+          address
+        )
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING *
+        `,
+        [
+          patientId,
+          name,
+          mobile,
+          age,
+          gender,
+          address
+        ]
+      );
 
-return res.status(400).json({
+      return res.json({
+        success: true,
+        message: "Patient created by Super Admin",
+        patient: result.rows[0]
+      });
+    }
 
-success:false,
-message:"Store code missing"
+    // ==========================================
+    // NORMAL ADMIN
+    // ==========================================
 
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code missing"
+      });
+    }
+
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(*) 
+      FROM patients
+      WHERE store_code = $1
+      `,
+      [storeCode]
+    );
+
+    const nextNumber =
+      Number(countResult.rows[0].count) + 1;
+
+    const patientId =
+      "PT" + String(nextNumber).padStart(3, "0");
+
+    const result = await pool.query(
+      `
+      INSERT INTO patients
+      (
+        patient_id,
+        store_code,
+        name,
+        mobile,
+        age,
+        gender,
+        address
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+      `,
+      [
+        patientId,
+        storeCode,
+        name,
+        mobile,
+        age,
+        gender,
+        address
+      ]
+    );
+
+    return res.json({
+      success: true,
+      message: "Patient created",
+      patient: result.rows[0]
+    });
+
+  } catch (error) {
+
+    console.error("ADD PATIENT ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Error creating patient"
+    });
+  }
 });
-
-}
-
-
-// Generate PT001, PT002...
-
-const countResult = await pool.query(
-`
-SELECT COUNT(*) 
-FROM patients
-WHERE store_code=$1
-`,
-[
-storeCode
-]
-);
-
-
-const nextNumber =
-Number(countResult.rows[0].count)+1;
-
-
-const patientId =
-"PT"+String(nextNumber).padStart(3,"0");
-
-
-
-const result =
-await pool.query(
-
-`
-
-INSERT INTO patients
-
-(
-patient_id,
-store_code,
-name,
-mobile,
-age,
-gender,
-address
-)
-
-VALUES($1,$2,$3,$4,$5,$6,$7)
-
-RETURNING *
-
-`,
-
-[
-
-patientId,
-storeCode,
-name,
-mobile,
-age,
-gender,
-address
-
-]
-
-
-);
-
-
-
-res.json({
-
-success:true,
-
-message:"Patient created",
-
-patient:result.rows[0]
-
-});
-
-
-}
-
-catch(error){
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Error creating patient"
-
-});
-
-
-}
-
-
-});
-
-
 
 
 
