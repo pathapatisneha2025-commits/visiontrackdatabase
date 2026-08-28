@@ -71,6 +71,7 @@ router.post("/add", async (req, res) => {
   try {
     const {
       storeCode,
+      role,
 
       patient_name,
       patient_id,
@@ -107,17 +108,30 @@ router.post("/add", async (req, res) => {
       notes,
 
       next_review_date,
-
     } = req.body;
 
-    if (!storeCode) {
+    // =====================================================
+    // STORE CODE / ROLE VALIDATION
+    // =====================================================
+
+    const isSuperAdmin = role === "super_admin";
+
+    // Normal users must have storeCode
+    // Super Admin can continue without storeCode
+    if (!storeCode && !isSuperAdmin) {
       return res.status(400).json({
         success: false,
-        message: "Store code missing"
+        message: "Store code missing",
       });
     }
 
+    // If Super Admin has no storeCode, save NULL
+    const finalStoreCode = storeCode || null;
+
+    // =====================================================
     // 1. SAVE EYE EXAM
+    // =====================================================
+
     const result = await pool.query(
       `
       INSERT INTO eye_exams
@@ -210,7 +224,7 @@ router.post("/add", async (req, res) => {
       `,
 
       [
-        storeCode,
+        finalStoreCode,
 
         patient_name,
         patient_id,
@@ -246,13 +260,15 @@ router.post("/add", async (req, res) => {
 
         notes,
 
-        next_review_date
+        next_review_date,
       ]
     );
 
+    // =====================================================
     // 2. CREATE FOLLOW-UP NOTIFICATION
-    if (next_review_date) {
+    // =====================================================
 
+    if (next_review_date) {
       await pool.query(
         `
         INSERT INTO notifications
@@ -282,39 +298,40 @@ router.post("/add", async (req, res) => {
         `,
 
         [
-          storeCode,
+          finalStoreCode,
 
           patient_id,
-
           patient_name,
-
           mobile_number,
 
           "Eye Follow-up Reminder",
 
-          `${patient_name} has an eye review appointment. ${diagnosis || "Eye Checkup"}`,
+          `${patient_name} has an eye review appointment. ${
+            diagnosis || "Eye Checkup"
+          }`,
 
-          next_review_date
+          next_review_date,
         ]
       );
     }
 
+    // =====================================================
+    // 3. SUCCESS RESPONSE
+    // =====================================================
+
     res.json({
       success: true,
       message: "Eye examination saved successfully",
-      exam: result.rows[0]
+      exam: result.rows[0],
     });
 
   } catch (error) {
-
-    console.log(
-      "SAVE EYE EXAM ERROR:",
-      error
-    );
+    console.log("SAVE EYE EXAM ERROR:", error);
 
     res.status(500).json({
       success: false,
-      message: "Error saving eye exam"
+      message: "Error saving eye exam",
+      error: error.message,
     });
   }
 });
