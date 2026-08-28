@@ -368,6 +368,7 @@ router.post("/add", async (req, res) => {
   try {
 
     const {
+      role,
       storeCode,
       name,
       mobile,
@@ -376,13 +377,19 @@ router.post("/add", async (req, res) => {
       address
     } = req.body;
 
+    console.log("ADD PATIENT REQUEST:", req.body);
+
 
     // ==========================================
     // SUPER ADMIN
-    // NO STORE CODE
+    // ROLE = superadmin
+    // STORE CODE WILL BE NULL
     // ==========================================
 
-    if (!storeCode) {
+    if (role === "superadmin") {
+
+      console.log("Creating SUPERADMIN patient");
+
 
       // Generate Super Admin patient ID
       const countResult = await pool.query(
@@ -393,8 +400,10 @@ router.post("/add", async (req, res) => {
         `
       );
 
+
       const nextNumber =
         Number(countResult.rows[0].count) + 1;
+
 
       const patientId =
         "PT" + String(nextNumber).padStart(3, "0");
@@ -449,7 +458,21 @@ router.post("/add", async (req, res) => {
 
     // ==========================================
     // NORMAL ADMIN
-    // STORE CODE EXISTS
+    // ROLE IS NOT SUPERADMIN
+    // STORE CODE REQUIRED
+    // ==========================================
+
+    if (!storeCode) {
+
+      return res.status(400).json({
+        success: false,
+        message: "Store code missing"
+      });
+    }
+
+
+    // ==========================================
+    // GENERATE ADMIN PATIENT ID
     // ==========================================
 
     const countResult = await pool.query(
@@ -471,6 +494,10 @@ router.post("/add", async (req, res) => {
     const patientId =
       "PT" + String(nextNumber).padStart(3, "0");
 
+
+    // ==========================================
+    // CREATE ADMIN PATIENT
+    // ==========================================
 
     const result = await pool.query(
       `
@@ -518,11 +545,14 @@ router.post("/add", async (req, res) => {
       patient: result.rows[0]
     });
 
-  }
 
-  catch (error) {
+  } catch (error) {
 
-    console.error("ADD PATIENT ERROR:", error);
+    console.error(
+      "ADD PATIENT ERROR:",
+      error
+    );
+
 
     return res.status(500).json({
       success: false,
@@ -590,7 +620,40 @@ success:false
 
 
 });
+// ==========================================
+// GET ALL SUPER ADMIN PATIENTS
+// ==========================================
 
+router.get("/superadmin", async (req, res) => {
+  try {
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM patients
+      WHERE role = 'superadmin'
+      ORDER BY id DESC
+      `
+    );
+
+    return res.json({
+      success: true,
+      patients: result.rows
+    });
+
+  } catch (error) {
+
+    console.error(
+      "GET SUPER ADMIN PATIENTS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching Super Admin patients"
+    });
+  }
+});
 
 // DELETE PATIENT
 router.delete("/delete/:id", async(req,res)=>{
