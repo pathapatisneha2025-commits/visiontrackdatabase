@@ -111,13 +111,14 @@ router.post("/add", async (req, res) => {
     } = req.body;
 
     // =====================================================
-    // STORE CODE / ROLE VALIDATION
+    // ROLE VALIDATION
     // =====================================================
 
-    const isSuperAdmin = role === "super_admin";
+    const isSuperAdmin =
+      String(role || "").toLowerCase() === "super_admin" ||
+      String(role || "").toLowerCase() === "superadmin";
 
-    // Normal users must have storeCode
-    // Super Admin can continue without storeCode
+    // Normal users need store code
     if (!storeCode && !isSuperAdmin) {
       return res.status(400).json({
         success: false,
@@ -125,11 +126,11 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // If Super Admin has no storeCode, save NULL
-    const finalStoreCode = storeCode || null;
+    // Super Admin -> store_code NULL
+    const finalStoreCode = isSuperAdmin ? null : storeCode;
 
     // =====================================================
-    // 1. SAVE EYE EXAM
+    // SAVE EYE EXAM
     // =====================================================
 
     const result = await pool.query(
@@ -137,6 +138,7 @@ router.post("/add", async (req, res) => {
       INSERT INTO eye_exams
       (
         store_code,
+        role,
 
         patient_name,
         patient_id,
@@ -180,35 +182,34 @@ router.post("/add", async (req, res) => {
       VALUES
       (
         $1,
-
         $2,
+
         $3,
         $4,
         $5,
         $6,
-
         $7,
+
         $8,
-
         $9,
+
         $10,
-
         $11,
-        $12,
 
+        $12,
         $13,
+
         $14,
         $15,
-
         $16,
+
         $17,
         $18,
-
         $19,
 
         $20,
-        $21,
 
+        $21,
         $22,
 
         $23,
@@ -217,14 +218,16 @@ router.post("/add", async (req, res) => {
 
         $25,
 
+        $26,
+
         NOW()
       )
 
       RETURNING *
       `,
-
       [
         finalStoreCode,
+        isSuperAdmin ? "superadmin" : role,
 
         patient_name,
         patient_id,
@@ -265,7 +268,7 @@ router.post("/add", async (req, res) => {
     );
 
     // =====================================================
-    // 2. CREATE FOLLOW-UP NOTIFICATION
+    // FOLLOW-UP NOTIFICATION
     // =====================================================
 
     if (next_review_date) {
@@ -274,7 +277,6 @@ router.post("/add", async (req, res) => {
         INSERT INTO notifications
         (
           store_code,
-
           patient_id,
           patient_name,
           mobile_number,
@@ -296,7 +298,6 @@ router.post("/add", async (req, res) => {
           $7
         )
         `,
-
         [
           finalStoreCode,
 
@@ -316,7 +317,7 @@ router.post("/add", async (req, res) => {
     }
 
     // =====================================================
-    // 3. SUCCESS RESPONSE
+    // SUCCESS
     // =====================================================
 
     res.json({
@@ -326,7 +327,7 @@ router.post("/add", async (req, res) => {
     });
 
   } catch (error) {
-    console.log("SAVE EYE EXAM ERROR:", error);
+    console.error("SAVE EYE EXAM ERROR:", error);
 
     res.status(500).json({
       success: false,
@@ -335,7 +336,6 @@ router.post("/add", async (req, res) => {
     });
   }
 });
-
 
 
 
