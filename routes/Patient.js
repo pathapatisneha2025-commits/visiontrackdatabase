@@ -362,12 +362,9 @@ message:"Server error"
 /*
 CREATE PATIENT
 */
-
-
 router.post("/add", async (req, res) => {
   try {
     const {
-      role,
       storeCode,
       name,
       mobile,
@@ -375,6 +372,15 @@ router.post("/add", async (req, res) => {
       gender,
       address
     } = req.body;
+
+    // ==========================================
+    // DETERMINE ROLE
+    // ==========================================
+
+    const role =
+      !storeCode || storeCode.trim() === ""
+        ? "superadmin"
+        : "admin";
 
     // ==========================================
     // VALIDATION
@@ -389,13 +395,14 @@ router.post("/add", async (req, res) => {
 
     // ==========================================
     // SUPER ADMIN
+    // NO STORE CODE
     // ==========================================
 
     if (role === "superadmin") {
 
       // Generate global patient ID
       const countResult = await pool.query(`
-        SELECT COUNT(*) 
+        SELECT COUNT(*)
         FROM patients
       `);
 
@@ -410,13 +417,14 @@ router.post("/add", async (req, res) => {
         INSERT INTO patients
         (
           patient_id,
+          store_code,
           name,
           mobile,
           age,
           gender,
           address
         )
-        VALUES ($1,$2,$3,$4,$5,$6)
+        VALUES ($1, NULL, $2, $3, $4, $5, $6)
         RETURNING *
         `,
         [
@@ -431,6 +439,7 @@ router.post("/add", async (req, res) => {
 
       return res.json({
         success: true,
+        role: "superadmin",
         message: "Patient created by Super Admin",
         patient: result.rows[0]
       });
@@ -438,18 +447,12 @@ router.post("/add", async (req, res) => {
 
     // ==========================================
     // NORMAL ADMIN
+    // STORE CODE EXISTS
     // ==========================================
-
-    if (!storeCode) {
-      return res.status(400).json({
-        success: false,
-        message: "Store code missing"
-      });
-    }
 
     const countResult = await pool.query(
       `
-      SELECT COUNT(*) 
+      SELECT COUNT(*)
       FROM patients
       WHERE store_code = $1
       `,
@@ -490,6 +493,7 @@ router.post("/add", async (req, res) => {
 
     return res.json({
       success: true,
+      role: "admin",
       message: "Patient created",
       patient: result.rows[0]
     });
@@ -504,6 +508,7 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+
 
 
 
