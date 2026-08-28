@@ -626,35 +626,33 @@ success:false
 
 router.get("/superadmin", async (req, res) => {
   try {
+    console.log("SUPERADMIN PATIENT ROUTE CALLED");
 
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT *
       FROM patients
       WHERE role = 'superadmin'
+      AND is_deleted = false
       ORDER BY id DESC
-      `
-    );
+    `);
 
-    return res.json({
+    console.log("PATIENTS FOUND:", result.rows);
+
+    return res.status(200).json({
       success: true,
       patients: result.rows
     });
 
   } catch (error) {
-
-    console.error(
-      "GET SUPER ADMIN PATIENTS ERROR:",
-      error
-    );
+    console.error("SUPERADMIN PATIENT ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Error fetching Super Admin patients"
+      message: "Error fetching Super Admin patients",
+      error: error.message
     });
   }
 });
-
 // DELETE PATIENT
 router.delete("/delete/:id", async(req,res)=>{
 
