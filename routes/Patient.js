@@ -362,10 +362,12 @@ message:"Server error"
 /*
 CREATE PATIENT
 */
+
+
 router.post("/add", async (req, res) => {
   try {
+
     const {
-      role,
       storeCode,
       name,
       mobile,
@@ -374,24 +376,29 @@ router.post("/add", async (req, res) => {
       address
     } = req.body;
 
+
     // ==========================================
-    // SUPER ADMIN PATIENT
+    // SUPER ADMIN
+    // NO STORE CODE
     // ==========================================
 
-    if (role === "superadmin") {
+    if (!storeCode) {
 
       // Generate Super Admin patient ID
-      const countResult = await pool.query(`
+      const countResult = await pool.query(
+        `
         SELECT COUNT(*)
         FROM patients
         WHERE role = 'superadmin'
-      `);
+        `
+      );
 
       const nextNumber =
         Number(countResult.rows[0].count) + 1;
 
       const patientId =
         "PT" + String(nextNumber).padStart(3, "0");
+
 
       const result = await pool.query(
         `
@@ -406,22 +413,23 @@ router.post("/add", async (req, res) => {
           gender,
           address
         )
+
         VALUES
         (
           $1,
-          $2,
+          'superadmin',
           NULL,
+          $2,
           $3,
           $4,
           $5,
-          $6,
-          $7
+          $6
         )
+
         RETURNING *
         `,
         [
           patientId,
-          "superadmin",
           name,
           mobile,
           age,
@@ -430,6 +438,7 @@ router.post("/add", async (req, res) => {
         ]
       );
 
+
       return res.json({
         success: true,
         message: "Super Admin patient created",
@@ -437,16 +446,11 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // ==========================================
-    // NORMAL ADMIN PATIENT
-    // ==========================================
 
-    if (!storeCode) {
-      return res.status(400).json({
-        success: false,
-        message: "Store code missing"
-      });
-    }
+    // ==========================================
+    // NORMAL ADMIN
+    // STORE CODE EXISTS
+    // ==========================================
 
     const countResult = await pool.query(
       `
@@ -454,14 +458,19 @@ router.post("/add", async (req, res) => {
       FROM patients
       WHERE store_code = $1
       `,
-      [storeCode]
+      [
+        storeCode
+      ]
     );
+
 
     const nextNumber =
       Number(countResult.rows[0].count) + 1;
 
+
     const patientId =
       "PT" + String(nextNumber).padStart(3, "0");
+
 
     const result = await pool.query(
       `
@@ -476,8 +485,19 @@ router.post("/add", async (req, res) => {
         gender,
         address
       )
+
       VALUES
-      ($1, 'admin', $2, $3, $4, $5, $6, $7)
+      (
+        $1,
+        'admin',
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7
+      )
+
       RETURNING *
       `,
       [
@@ -491,19 +511,23 @@ router.post("/add", async (req, res) => {
       ]
     );
 
+
     return res.json({
       success: true,
       message: "Patient created",
       patient: result.rows[0]
     });
 
-  } catch (error) {
+  }
+
+  catch (error) {
 
     console.error("ADD PATIENT ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Error creating patient"
+      message: "Error creating patient",
+      error: error.message
     });
   }
 });
