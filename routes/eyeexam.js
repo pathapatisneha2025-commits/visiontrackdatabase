@@ -349,7 +349,7 @@ router.get("/super-admin", async (req, res) => {
       `
       SELECT *
       FROM eye_exams
-      WHERE LOWER(role) = 'super_admin'
+      WHERE LOWER(role) = 'superadmin'
       ORDER BY exam_date DESC, id DESC
       `
     );
