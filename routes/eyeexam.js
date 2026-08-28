@@ -339,7 +339,40 @@ router.post("/add", async (req, res) => {
 
 
 
+// =====================================================
+// GET ALL EYE EXAMS FOR SUPER ADMIN
+// =====================================================
 
+router.get("/super-admin", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM eye_exams
+      WHERE LOWER(role) = 'super_admin'
+      ORDER BY exam_date DESC, id DESC
+      `
+    );
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      exams: result.rows,
+    });
+
+  } catch (error) {
+    console.error(
+      "GET SUPER ADMIN EYE EXAMS ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Error fetching Super Admin eye examinations",
+      error: error.message,
+    });
+  }
+});
 /*
 GET PATIENT EYE EXAM HISTORY
 */
