@@ -632,7 +632,7 @@ router.get("/superadmin", async (req, res) => {
       SELECT *
       FROM patients
       WHERE role = 'superadmin'
-      AND is_deleted = false
+      AND is_deleted = f
       ORDER BY id DESC
     `);
 
