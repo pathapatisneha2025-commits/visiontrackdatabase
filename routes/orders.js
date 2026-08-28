@@ -23,47 +23,13 @@ router.post("/place", async (req, res) => {
       paymentMethod
     } = req.body;
 
-    // =====================================================
-    // ROLE
-    // =====================================================
-
-    const userRole = String(role || "").toLowerCase().trim();
-
-    const isSuperAdmin =
-      userRole === "superadmin" ||
-      userRole === "super_admin";
-
-    // =====================================================
-    // STORE CODE
-    //
-    // Normal user:
-    //     storeCode is REQUIRED
-    //
-    // Super Admin:
-    //     storeCode can be null
-    // =====================================================
-
-    const normalizedStoreCode =
-      storeCode &&
-      String(storeCode).trim()
-        ? String(storeCode).trim()
-        : null;
-
-    if (!isSuperAdmin && !normalizedStoreCode) {
-      return res.json({
-        success: false,
-        message: "Store code is required"
-      });
-    }
-
-    // =====================================================
-    // BASIC VALIDATION
-    // =====================================================
+    // ============================================
+    // VALIDATION
+    // ============================================
 
     if (
       !customer ||
       !items ||
-      !Array.isArray(items) ||
       items.length === 0 ||
       !paymentMethod
     ) {
@@ -73,29 +39,31 @@ router.post("/place", async (req, res) => {
       });
     }
 
-    // =====================================================
-    // CUSTOMER VALIDATION
-    // =====================================================
+    // ============================================
+    // ROLE / STORE LOGIC
+    // ============================================
 
-    if (
-      !customer.customerName &&
-      !customer.name
-    ) {
+    const userRole = role || "store";
+
+    // Superadmin does not need storeCode
+    if (userRole !== "superadmin" && !storeCode) {
       return res.json({
         success: false,
-        message: "Customer name is required"
+        message: "Store code is required"
       });
     }
 
-    // =====================================================
-    // BEGIN TRANSACTION
-    // =====================================================
+    // For superadmin storeCode will be NULL
+    const finalStoreCode =
+      userRole === "superadmin"
+        ? null
+        : storeCode;
 
     await client.query("BEGIN");
 
-    // =====================================================
+    // ============================================
     // GENERATE ORDER NUMBER
-    // =====================================================
+    // ============================================
 
     const orderCount = await client.query(`
       SELECT COUNT(DISTINCT order_id) AS count
@@ -103,24 +71,15 @@ router.post("/place", async (req, res) => {
     `);
 
     const nextOrderNumber =
-      Number(orderCount.rows[0].count || 0) + 1;
+      Number(orderCount.rows[0].count) + 1;
 
     const orderId =
       "ORD" +
       String(nextOrderNumber).padStart(3, "0");
 
-    // =====================================================
-    // CUSTOMER NAME
-    // =====================================================
-
-    const customerName =
-      customer.customerName ||
-      customer.name ||
-      "";
-
-    // =====================================================
-    // INSERT ITEMS
-    // =====================================================
+    // ============================================
+    // INSERT ORDER ITEMS
+    // ============================================
 
     for (const item of items) {
       await client.query(
@@ -161,169 +120,86 @@ router.post("/place", async (req, res) => {
         )
         `,
         [
-          // =================================================
-          // ORDER
-          // =================================================
-
           orderId,
 
-          // =================================================
-          // STORE
-          //
-          // Normal store:
-          //     "STORE001"
-          //
-          // Super Admin:
-          //     null
-          // =================================================
+          // NULL for superadmin
+          finalStoreCode,
 
-          normalizedStoreCode,
+          customer.customerName,
+          customer.mobile,
+          customer.address,
 
-          // =================================================
-          // CUSTOMER
-          // =================================================
+          item.product_id || item.id,
+          item.product_name,
+          item.brand,
+          item.image,
 
-          customerName,
+          Number(item.price),
+          Number(item.quantity),
 
-          customer.mobile || null,
-
-          customer.address || null,
-
-          // =================================================
-          // PRODUCT
-          // =================================================
-
-          item.product_id ||
-            item.id ||
-            null,
-
-          item.product_name ||
-            item.name ||
-            null,
-
-          item.brand ||
-            null,
-
-          item.image ||
-            item.img ||
-            null,
-
-          // =================================================
-          // PRICE
-          // =================================================
-
-          Number(item.price) || 0,
-
-          // =================================================
-          // QUANTITY
-          // =================================================
-
-          Number(item.quantity) || 1,
-
-          // =================================================
-          // TOTAL
-          // =================================================
-
-          Number(totalAmount) || 0,
-
-          // =================================================
-          // PAYMENT
-          // =================================================
+          Number(totalAmount),
 
           paymentMethod,
-
-          // =================================================
-          // STATUS
-          // =================================================
 
           "Pending"
         ]
       );
     }
 
-    // =====================================================
+    // ============================================
     // COMMIT
-    // =====================================================
+    // ============================================
 
     await client.query("COMMIT");
 
-    // =====================================================
+    // ============================================
     // CLEAR CART
-    //
-    // Super Admin has no storeCode, so don't run:
-    //
-    // DELETE FROM vcart_items WHERE store_code = NULL
-    //
-    // For normal stores, clear that store's cart.
-    // =====================================================
+    // ============================================
 
-    if (normalizedStoreCode) {
+    if (userRole === "superadmin") {
+      // Superadmin cart should be cleared without store code
+      await pool.query(`
+        DELETE FROM vcart_items
+      `);
+    } else {
       await pool.query(
         `
         DELETE FROM vcart_items
         WHERE store_code = $1
         `,
-        [normalizedStoreCode]
+        [storeCode]
       );
     }
 
-    // =====================================================
-    // SUCCESS
-    // =====================================================
+    // ============================================
+    // RESPONSE
+    // ============================================
 
-    return res.json({
+    res.json({
       success: true,
-
-      message: isSuperAdmin
-        ? "Super Admin order placed successfully"
-        : "Order placed successfully",
-
+      message: "Order placed successfully",
       orderId,
-
-      role: isSuperAdmin
-        ? "superadmin"
-        : role || "user",
-
-      storeCode:
-        normalizedStoreCode
+      role: userRole,
+      storeCode: finalStoreCode
     });
 
   } catch (error) {
+    await client.query("ROLLBACK");
 
-    // =====================================================
-    // ROLLBACK
-    // =====================================================
-
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackError) {
-      console.log(
-        "ROLLBACK ERROR:",
-        rollbackError
-      );
-    }
-
-    console.error(
+    console.log(
       "PLACE ORDER ERROR:",
       error
     );
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Server error",
-      error:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : undefined
+      message: "Server error"
     });
 
   } finally {
-
     client.release();
-
   }
 });
-
 
 
 
