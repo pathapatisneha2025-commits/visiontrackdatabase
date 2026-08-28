@@ -109,368 +109,384 @@ error:error.message
 CREATE NEW ORDER
 */
 
+router.post("/add", async (req, res) => {
+  try {
+    const {
+      storeCode,
+      role,
 
-router.post("/add", async(req,res)=>{
+      bill_number,
+      order_no,
+      order_date,
+      expected_delivery,
 
-try{
+      patient_id,
+      patient_name,
+      mobile,
+      age,
+      gender,
 
-const {
+      frame_barcode,
+      frame_model,
 
-storeCode,
+      lens_type,
 
-bill_number,
+      prescription_notes,
 
-order_no,
+      total_amount,
+      advance_paid,
 
-order_date,
+      status,
+      payment_status
+    } = req.body;
 
-expected_delivery,
+    // ============================================
+    // ROLE
+    // ============================================
 
+    const userRole = role || "store";
 
-patient_id,
+    // ============================================
+    // STORE CODE LOGIC
+    // ============================================
 
-patient_name,
+    // Superadmin does NOT require storeCode
+    if (
+      userRole !== "superadmin" &&
+      !storeCode
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code missing"
+      });
+    }
 
-mobile,
+    // Superadmin => NULL
+    // Other roles => actual storeCode
+    const finalStoreCode =
+      userRole === "superadmin"
+        ? null
+        : storeCode;
 
-age,
+    console.log(
+      "OPTICAL ORDER ROLE:",
+      userRole
+    );
 
-gender,
+    console.log(
+      "OPTICAL ORDER STORE CODE:",
+      finalStoreCode
+    );
 
+    // ============================================
+    // BALANCE
+    // ============================================
 
-frame_barcode,
+    const balance =
+      Number(total_amount || 0) -
+      Number(advance_paid || 0);
 
-frame_model,
+    // ============================================
+    // CREATE ORDER
+    // ============================================
 
+    const result = await pool.query(
+      `
+      INSERT INTO optical_orders
+      (
+        store_code,
+        bill_number,
+        order_no,
+        order_date,
+        expected_delivery,
 
-lens_type,
+        patient_id,
+        patient_name,
+        mobile,
+        age,
+        gender,
 
+        frame_barcode,
+        frame_model,
 
-prescription_notes,
+        lens_type,
 
+        prescription_notes,
 
-total_amount,
+        total_amount,
+        advance_paid,
+        balance_amount,
 
-advance_paid,
+        status,
+        payment_status
+      )
 
+      VALUES
+      (
+        $1,$2,$3,$4,$5,
 
-status,
+        $6,$7,$8,$9,$10,
 
-payment_status
+        $11,$12,
 
+        $13,
 
-}=req.body;
+        $14,
 
+        $15,$16,$17,
 
+        $18,$19
+      )
 
-if(!storeCode){
+      RETURNING *
+      `,
+      [
+        // ========================================
+        // STORE CODE
+        // ========================================
 
-return res.status(400).json({
+        finalStoreCode,
 
-success:false,
-message:"Store code missing"
+        bill_number || null,
 
+        order_no || null,
+
+        order_date || null,
+
+        expected_delivery || null,
+
+        // ========================================
+        // PATIENT
+        // ========================================
+
+        patient_id || null,
+
+        patient_name || null,
+
+        mobile || null,
+
+        age || null,
+
+        gender || null,
+
+        // ========================================
+        // PRODUCT
+        // ========================================
+
+        frame_barcode || null,
+
+        frame_model || null,
+
+        lens_type || null,
+
+        // ========================================
+        // PRESCRIPTION
+        // ========================================
+
+        prescription_notes || null,
+
+        // ========================================
+        // PAYMENT
+        // ========================================
+
+        Number(total_amount || 0),
+
+        Number(advance_paid || 0),
+
+        balance,
+
+        // ========================================
+        // STATUS
+        // ========================================
+
+        status || "Pending",
+
+        payment_status || "Due"
+      ]
+    );
+
+    // ============================================
+    // REDUCE FRAME STOCK
+    // ============================================
+
+    if (frame_barcode) {
+
+      let stockResult;
+
+      // ==========================================
+      // SUPERADMIN
+      // No store_code filtering
+      // ==========================================
+
+      if (userRole === "superadmin") {
+
+        stockResult = await pool.query(
+          `
+          SELECT
+            id,
+            quantity,
+            store_code
+          FROM stock_inventory
+          WHERE barcode = $1
+          LIMIT 1
+          `,
+          [
+            frame_barcode
+          ]
+        );
+
+      }
+
+      // ==========================================
+      // NORMAL STORE USER
+      // Filter by store_code
+      // ==========================================
+
+      else {
+
+        stockResult = await pool.query(
+          `
+          SELECT
+            id,
+            quantity,
+            store_code
+          FROM stock_inventory
+          WHERE barcode = $1
+          AND store_code = $2
+          LIMIT 1
+          `,
+          [
+            frame_barcode,
+            storeCode
+          ]
+        );
+
+      }
+
+      // ==========================================
+      // STOCK FOUND
+      // ==========================================
+
+      if (
+        stockResult.rows.length > 0
+      ) {
+
+        const stockItem =
+          stockResult.rows[0];
+
+        const availableQty =
+          Number(
+            stockItem.quantity
+          );
+
+        if (
+          availableQty > 0
+        ) {
+
+          // ======================================
+          // SUPERADMIN
+          // Update using inventory ID
+          // ======================================
+
+          if (
+            userRole === "superadmin"
+          ) {
+
+            await pool.query(
+              `
+              UPDATE stock_inventory
+              SET quantity = quantity - 1
+              WHERE id = $1
+              AND quantity > 0
+              `,
+              [
+                stockItem.id
+              ]
+            );
+
+          }
+
+          // ======================================
+          // NORMAL STORE
+          // ======================================
+
+          else {
+
+            await pool.query(
+              `
+              UPDATE stock_inventory
+              SET quantity = quantity - 1
+              WHERE barcode = $1
+              AND store_code = $2
+              AND quantity > 0
+              `,
+              [
+                frame_barcode,
+                storeCode
+              ]
+            );
+
+          }
+
+        } else {
+
+          console.log(
+            "Stock already zero:",
+            frame_barcode
+          );
+
+        }
+
+      } else {
+
+        console.log(
+          "Frame stock not found:",
+          frame_barcode
+        );
+
+      }
+    }
+
+    // ============================================
+    // RESPONSE
+    // ============================================
+
+    return res.json({
+      success: true,
+
+      message:
+        "Order created and stock updated",
+
+      order:
+        result.rows[0],
+
+      role:
+        userRole,
+
+      storeCode:
+        finalStoreCode
+    });
+
+  } catch (error) {
+
+    console.log(
+      "OPTICAL ORDER CREATE ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        "Error creating order",
+
+      error:
+        error.message
+
+    });
+  }
 });
-
-}
-
-
-
-const balance =
-Number(total_amount || 0)
--
-Number(advance_paid || 0);
-
-
-
-
-// CREATE ORDER
-
-const result = await pool.query(
-
-`
-
-INSERT INTO optical_orders
-
-(
-
-store_code,
-
-bill_number,
-
-order_no,
-
-order_date,
-
-expected_delivery,
-
-
-patient_id,
-
-patient_name,
-
-mobile,
-
-age,
-
-gender,
-
-
-frame_barcode,
-
-frame_model,
-
-
-lens_type,
-
-
-prescription_notes,
-
-
-total_amount,
-
-advance_paid,
-
-balance_amount,
-
-
-status,
-
-payment_status
-
-)
-
-
-VALUES
-
-(
-
-$1,$2,$3,$4,$5,
-
-$6,$7,$8,$9,$10,
-
-$11,$12,
-
-$13,
-
-$14,
-
-$15,$16,$17,
-
-$18,$19
-
-)
-
-
-RETURNING *
-
-`,
-
-[
-
-
-storeCode,
-
-bill_number || null,
-
-order_no,
-
-
-order_date,
-
-expected_delivery,
-
-
-patient_id,
-
-patient_name,
-
-mobile,
-
-age || null,
-
-gender,
-
-
-frame_barcode,
-
-frame_model,
-
-
-lens_type,
-
-
-prescription_notes,
-
-
-total_amount || 0,
-
-advance_paid || 0,
-
-balance,
-
-
-status || "Pending",
-
-payment_status || "Due"
-
-
-]
-
-);
-
-
-
-
-
-// ===============================
-// REDUCE FRAME STOCK
-// ===============================
-
-if(frame_barcode){
-
-
-const stockResult = await pool.query(
-
-`
-
-SELECT quantity
-
-FROM stock_inventory
-
-WHERE barcode=$1
-
-AND store_code=$2
-
-`,
-
-[
-frame_barcode,
-storeCode
-]
-
-);
-
-
-
-if(stockResult.rows.length > 0){
-
-
-const availableQty =
-Number(stockResult.rows[0].quantity);
-
-
-
-if(availableQty > 0){
-
-
-await pool.query(
-
-`
-
-UPDATE stock_inventory
-
-SET quantity = quantity - 1
-
-WHERE barcode=$1
-
-AND store_code=$2
-
-`,
-
-[
-frame_barcode,
-storeCode
-]
-
-);
-
-
-}
-
-else{
-
-
-console.log(
-"Stock already zero:",
-frame_barcode
-);
-
-
-}
-
-
-}
-
-}
-
-
-
-
-
-// ===============================
-// REDUCE LENS STOCK (OPTIONAL)
-// ===============================
-//
-// if(lens_barcode){
-//
-// await pool.query(
-// `
-// UPDATE stock_inventory
-// SET quantity = quantity - 1
-// WHERE barcode=$1
-// AND store_code=$2
-// AND quantity > 0
-// `,
-// [
-// lens_barcode,
-// storeCode
-// ]
-// );
-//
-// }
-
-
-
-
-
-res.json({
-
-success:true,
-
-message:"Order created and stock updated",
-
-order:result.rows[0]
-
-});
-
-
-}
-
-
-catch(error){
-
-
-console.log(error);
-
-
-res.status(500).json({
-
-success:false,
-
-message:"Error creating order",
-
-error:error.message
-
-});
-
-
-}
-
-
-});
-
-
 
 router.get("/delete-history", async(req,res)=>{
 

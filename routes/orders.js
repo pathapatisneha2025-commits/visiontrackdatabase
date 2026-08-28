@@ -10,196 +10,265 @@ const pool = require("../db");
 // PLACE ORDER
 // ===============================
 
-router.post("/place", async (req, res) => {
-  const client = await pool.connect();
+router.post("/place", async (req,res)=>{
 
-  try {
-    const {
-      storeCode,
-      role,
-      customer,
-      items,
-      totalAmount,
-      paymentMethod
-    } = req.body;
 
-    // ============================================
-    // VALIDATION
-    // ============================================
+const client = await pool.connect();
 
-    if (
-      !customer ||
-      !items ||
-      items.length === 0 ||
-      !paymentMethod
-    ) {
-      return res.json({
-        success: false,
-        message: "Invalid order data"
-      });
-    }
 
-    // ============================================
-    // ROLE / STORE LOGIC
-    // ============================================
+try{
 
-    const userRole = role || "store";
 
-    // Superadmin does not need storeCode
-    if (userRole !== "superadmin" && !storeCode) {
-      return res.json({
-        success: false,
-        message: "Store code is required"
-      });
-    }
+const {
 
-    // For superadmin storeCode will be NULL
-    const finalStoreCode =
-      userRole === "superadmin"
-        ? null
-        : storeCode;
+storeCode,
 
-    await client.query("BEGIN");
+customer,
 
-    // ============================================
-    // GENERATE ORDER NUMBER
-    // ============================================
+items,
 
-    const orderCount = await client.query(`
-      SELECT COUNT(DISTINCT order_id) AS count
-      FROM vorder
-    `);
+totalAmount,
 
-    const nextOrderNumber =
-      Number(orderCount.rows[0].count) + 1;
+paymentMethod
 
-    const orderId =
-      "ORD" +
-      String(nextOrderNumber).padStart(3, "0");
 
-    // ============================================
-    // INSERT ORDER ITEMS
-    // ============================================
+}=req.body;
 
-    for (const item of items) {
-      await client.query(
-        `
-        INSERT INTO vorder
-        (
-          order_id,
-          store_code,
-          customer_name,
-          mobile,
-          address,
-          product_id,
-          product_name,
-          brand,
-          image,
-          price,
-          quantity,
-          total_amount,
-          payment_method,
-          status
-        )
-        VALUES
-        (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          $11,
-          $12,
-          $13,
-          $14
-        )
-        `,
-        [
-          orderId,
 
-          // NULL for superadmin
-          finalStoreCode,
 
-          customer.customerName,
-          customer.mobile,
-          customer.address,
+if(
+!storeCode ||
+!customer ||
+!items ||
+items.length===0 ||
+!paymentMethod
+){
 
-          item.product_id || item.id,
-          item.product_name,
-          item.brand,
-          item.image,
 
-          Number(item.price),
-          Number(item.quantity),
+return res.json({
 
-          Number(totalAmount),
+success:false,
 
-          paymentMethod,
+message:"Invalid order data"
 
-          "Pending"
-        ]
-      );
-    }
-
-    // ============================================
-    // COMMIT
-    // ============================================
-
-    await client.query("COMMIT");
-
-    // ============================================
-    // CLEAR CART
-    // ============================================
-
-    if (userRole === "superadmin") {
-      // Superadmin cart should be cleared without store code
-      await pool.query(`
-        DELETE FROM vcart_items
-      `);
-    } else {
-      await pool.query(
-        `
-        DELETE FROM vcart_items
-        WHERE store_code = $1
-        `,
-        [storeCode]
-      );
-    }
-
-    // ============================================
-    // RESPONSE
-    // ============================================
-
-    res.json({
-      success: true,
-      message: "Order placed successfully",
-      orderId,
-      role: userRole,
-      storeCode: finalStoreCode
-    });
-
-  } catch (error) {
-    await client.query("ROLLBACK");
-
-    console.log(
-      "PLACE ORDER ERROR:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
-
-  } finally {
-    client.release();
-  }
 });
+
+
+}
+
+
+
+await client.query("BEGIN");
+
+
+
+// Generate Order Number
+// Generate Order Number
+
+const orderCount = await client.query(
+`
+SELECT COUNT(DISTINCT order_id) AS count
+FROM vorder
+`
+);
+
+
+const nextOrderNumber =
+Number(orderCount.rows[0].count) + 1;
+
+
+const orderId =
+"ORD" + String(nextOrderNumber).padStart(3,"0");
+
+
+
+
+for(const item of items){
+
+
+
+await client.query(
+
+`
+
+INSERT INTO vorder
+
+(
+
+order_id,
+
+store_code,
+
+customer_name,
+
+mobile,
+
+address,
+
+product_id,
+
+product_name,
+
+brand,
+
+image,
+
+price,
+
+quantity,
+
+total_amount,
+
+payment_method,
+
+status
+
+)
+
+
+VALUES
+
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+
+`
+
+,
+
+
+[
+
+
+orderId,
+
+storeCode,
+
+
+customer.customerName,
+
+customer.mobile,
+
+customer.address,
+
+
+item.product_id || item.id,
+
+item.product_name,
+
+item.brand,
+
+item.image,
+
+
+Number(item.price),
+
+Number(item.quantity),
+
+
+Number(totalAmount),
+
+
+paymentMethod,
+
+
+"Pending"
+
+
+]
+
+
+);
+
+
+
+}
+
+
+
+
+
+// Commit order
+
+await client.query("COMMIT");
+
+
+
+
+// ================================
+// CLEAR CART AFTER ORDER SUCCESS
+// ================================
+
+
+await pool.query(
+
+`
+
+DELETE FROM vcart_items
+
+WHERE store_code=$1
+
+`,
+
+[storeCode]
+
+
+);
+
+
+
+
+
+res.json({
+
+success:true,
+
+message:"Order placed successfully",
+
+orderId
+
+
+});
+
+
+
+}
+
+catch(error){
+
+
+await client.query("ROLLBACK");
+
+
+console.log(
+"PLACE ORDER ERROR",
+error
+);
+
+
+
+res.status(500).json({
+
+success:false,
+
+message:"Server error"
+
+});
+
+
+}
+
+finally{
+
+
+client.release();
+
+
+}
+
+
+
+});
+
+
 
 
 
