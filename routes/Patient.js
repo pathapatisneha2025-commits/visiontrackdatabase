@@ -365,6 +365,7 @@ CREATE PATIENT
 router.post("/add", async (req, res) => {
   try {
     const {
+      role,
       storeCode,
       name,
       mobile,
@@ -374,36 +375,16 @@ router.post("/add", async (req, res) => {
     } = req.body;
 
     // ==========================================
-    // DETERMINE ROLE
-    // ==========================================
-
-    const role =
-      !storeCode || storeCode.trim() === ""
-        ? "superadmin"
-        : "admin";
-
-    // ==========================================
-    // VALIDATION
-    // ==========================================
-
-    if (!name || !mobile) {
-      return res.status(400).json({
-        success: false,
-        message: "Name and mobile are required"
-      });
-    }
-
-    // ==========================================
-    // SUPER ADMIN
-    // NO STORE CODE
+    // SUPER ADMIN PATIENT
     // ==========================================
 
     if (role === "superadmin") {
 
-      // Generate global patient ID
+      // Generate Super Admin patient ID
       const countResult = await pool.query(`
         SELECT COUNT(*)
         FROM patients
+        WHERE role = 'superadmin'
       `);
 
       const nextNumber =
@@ -417,6 +398,7 @@ router.post("/add", async (req, res) => {
         INSERT INTO patients
         (
           patient_id,
+          role,
           store_code,
           name,
           mobile,
@@ -424,11 +406,22 @@ router.post("/add", async (req, res) => {
           gender,
           address
         )
-        VALUES ($1, NULL, $2, $3, $4, $5, $6)
+        VALUES
+        (
+          $1,
+          $2,
+          NULL,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7
+        )
         RETURNING *
         `,
         [
           patientId,
+          "superadmin",
           name,
           mobile,
           age,
@@ -439,16 +432,21 @@ router.post("/add", async (req, res) => {
 
       return res.json({
         success: true,
-        role: "superadmin",
-        message: "Patient created by Super Admin",
+        message: "Super Admin patient created",
         patient: result.rows[0]
       });
     }
 
     // ==========================================
-    // NORMAL ADMIN
-    // STORE CODE EXISTS
+    // NORMAL ADMIN PATIENT
     // ==========================================
+
+    if (!storeCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Store code missing"
+      });
+    }
 
     const countResult = await pool.query(
       `
@@ -470,6 +468,7 @@ router.post("/add", async (req, res) => {
       INSERT INTO patients
       (
         patient_id,
+        role,
         store_code,
         name,
         mobile,
@@ -477,7 +476,8 @@ router.post("/add", async (req, res) => {
         gender,
         address
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES
+      ($1, 'admin', $2, $3, $4, $5, $6, $7)
       RETURNING *
       `,
       [
@@ -493,7 +493,6 @@ router.post("/add", async (req, res) => {
 
     return res.json({
       success: true,
-      role: "admin",
       message: "Patient created",
       patient: result.rows[0]
     });
