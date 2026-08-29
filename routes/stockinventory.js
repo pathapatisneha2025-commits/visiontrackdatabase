@@ -216,6 +216,7 @@ router.post("/add", async (req, res) => {
       size,
       material,
       gender,
+      rack_for_lenses,
 
       lens_type,
       power_range,
@@ -236,60 +237,84 @@ router.post("/add", async (req, res) => {
     } = body;
 
     /* =========================================================
-       ROLE + STORE CODE LOGIC
+       STORE CODE CHECK
     ========================================================= */
-
-    /*
-      If storeCode is NOT provided:
-        role = super_admin
-        store_code = NULL
-
-      If storeCode IS provided:
-        use the provided role/store
-    */
 
     const hasStoreCode =
       storeCode !== undefined &&
       storeCode !== null &&
       String(storeCode).trim() !== "";
 
-    let userRole = req.user?.role || role || "";
+    /* =========================================================
+       ROLE
+    ========================================================= */
 
-    let isSuperAdmin = false;
+    /*
+      Priority:
+      1. req.user.role if authentication middleware exists
+      2. role from request body
 
+      Accepted:
+      superadmin
+      super_admin
+      super admin
+    */
+
+    let userRole = String(
+      req.user?.role || role || ""
+    ).trim();
+
+    const normalizedRole = userRole
+      .toLowerCase()
+      .replace(/[\s_-]/g, "");
+
+    const isSuperAdmin =
+      normalizedRole === "superadmin";
+
+    /* =========================================================
+       FINAL ROLE + STORE
+    ========================================================= */
+
+    let finalRole = "";
     let finalStoreCode = null;
 
-    /* =========================================================
-       NO STORE CODE = SUPER ADMIN
-    ========================================================= */
-
-    if (!hasStoreCode) {
-      userRole = "superadmin";
-      isSuperAdmin = true;
-      finalStoreCode = null;
-    }
-
-    /* =========================================================
-       STORE CODE EXISTS
-    ========================================================= */
-
-    else {
-      finalStoreCode = String(storeCode).trim();
-
-      const normalizedRole = String(userRole || "")
-        .toLowerCase()
-        .replace(/[\s_-]/g, "");
-
-      isSuperAdmin =
-        normalizedRole === "superadmin";
+    if (isSuperAdmin) {
+      /*
+        Always save exactly:
+        superadmin
+      */
+      finalRole = "superadmin";
 
       /*
-        If role is explicitly Super Admin,
-        store code can still be provided.
+        Super Admin without store:
+        store_code = NULL
       */
+      if (!hasStoreCode) {
+        finalStoreCode = null;
+      }
 
-      if (isSuperAdmin) {
-        userRole = "superadmin";
+      /*
+        Super Admin with store:
+        keep selected store
+      */
+      else {
+        finalStoreCode =
+          String(storeCode).trim();
+      }
+    } else {
+      /*
+        Normal user
+      */
+      finalRole = userRole || "admin";
+
+      /*
+        Normal users require/use store code
+      */
+      if (hasStoreCode) {
+        finalStoreCode =
+          String(storeCode).trim();
+      } else {
+        finalStoreCode = null;
       }
     }
 
@@ -301,14 +326,40 @@ router.post("/add", async (req, res) => {
     console.log("ADD STOCK");
     console.log("====================================");
 
-    console.log("REQUEST ROLE:", role);
-    console.log("AUTH ROLE:", req.user?.role || null);
-    console.log("STORE CODE:", storeCode);
+    console.log(
+      "REQUEST BODY ROLE:",
+      role
+    );
 
-    console.log("HAS STORE CODE:", hasStoreCode);
-    console.log("FINAL ROLE:", userRole);
-    console.log("IS SUPER ADMIN:", isSuperAdmin);
-    console.log("FINAL STORE CODE:", finalStoreCode);
+    console.log(
+      "AUTH ROLE:",
+      req.user?.role || null
+    );
+
+    console.log(
+      "NORMALIZED ROLE:",
+      normalizedRole
+    );
+
+    console.log(
+      "IS SUPER ADMIN:",
+      isSuperAdmin
+    );
+
+    console.log(
+      "FINAL ROLE:",
+      finalRole
+    );
+
+    console.log(
+      "REQUEST STORE CODE:",
+      storeCode
+    );
+
+    console.log(
+      "FINAL STORE CODE:",
+      finalStoreCode
+    );
 
     console.log("====================================");
 
@@ -316,7 +367,10 @@ router.post("/add", async (req, res) => {
        CATEGORY VALIDATION
     ========================================================= */
 
-    if (!category || !String(category).trim()) {
+    if (
+      !category ||
+      !String(category).trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Category is required"
@@ -327,7 +381,10 @@ router.post("/add", async (req, res) => {
        BRAND VALIDATION
     ========================================================= */
 
-    if (!brand || !String(brand).trim()) {
+    if (
+      !brand ||
+      !String(brand).trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Brand is required"
@@ -349,7 +406,8 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    const quantityNumber = Number(quantity);
+    const quantityNumber =
+      Number(quantity);
 
     if (
       !Number.isInteger(quantityNumber) ||
@@ -363,6 +421,44 @@ router.post("/add", async (req, res) => {
     }
 
     /* =========================================================
+       PRICE VALIDATION
+    ========================================================= */
+
+    const purchasePriceNumber =
+      purchase_price === "" ||
+      purchase_price === undefined ||
+      purchase_price === null
+        ? 0
+        : Number(purchase_price);
+
+    const sellingPriceNumber =
+      selling_price === "" ||
+      selling_price === undefined ||
+      selling_price === null
+        ? 0
+        : Number(selling_price);
+
+    if (
+      Number.isNaN(purchasePriceNumber) ||
+      purchasePriceNumber < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid purchase price"
+      });
+    }
+
+    if (
+      Number.isNaN(sellingPriceNumber) ||
+      sellingPriceNumber < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid selling price"
+      });
+    }
+
+    /* =========================================================
        GENERATE BARCODE
     ========================================================= */
 
@@ -372,23 +468,29 @@ router.post("/add", async (req, res) => {
       !finalBarcode ||
       !String(finalBarcode).trim()
     ) {
-      finalBarcode = await generateBarcode(
-        finalStoreCode
-      );
+      finalBarcode =
+        await generateBarcode(
+          finalStoreCode
+        );
     }
 
     /* =========================================================
        BARCODE VALIDATION
     ========================================================= */
 
-    if (!finalBarcode) {
+    if (
+      !finalBarcode ||
+      !String(finalBarcode).trim()
+    ) {
       return res.status(500).json({
         success: false,
-        message: "Unable to generate barcode"
+        message:
+          "Unable to generate barcode"
       });
     }
 
-    finalBarcode = String(finalBarcode).trim();
+    finalBarcode =
+      String(finalBarcode).trim();
 
     /* =========================================================
        GENERATE BARCODE IMAGE
@@ -397,17 +499,25 @@ router.post("/add", async (req, res) => {
     let barcodeImage = null;
 
     try {
-      const png = await bwipjs.toBuffer({
-        bcid: "code128",
-        text: String(finalBarcode),
-        scale: 3,
-        height: 12,
-        includetext: true,
-        textxalign: "center"
-      });
+      const png =
+        await bwipjs.toBuffer({
+          bcid: "code128",
+
+          text: String(finalBarcode),
+
+          scale: 3,
+
+          height: 12,
+
+          includetext: true,
+
+          textxalign: "center"
+        });
 
       barcodeImage =
-        `data:image/png;base64,${png.toString("base64")}`;
+        `data:image/png;base64,${png.toString(
+          "base64"
+        )}`;
 
     } catch (err) {
       console.error(
@@ -420,95 +530,205 @@ router.post("/add", async (req, res) => {
        INSERT STOCK
     ========================================================= */
 
-    const result = await pool.query(
-      `
-      INSERT INTO stock_inventory
-      (
-        store_code,
-        category,
-        barcode,
-        brand,
+    const result =
+      await pool.query(
+        `
+        INSERT INTO stock_inventory
+        (
+          store_code,
+          role,
 
-        frame_name,
-        model,
-        color,
-        size,
-        material,
-        gender,
+          category,
+          barcode,
+          brand,
 
-        lens_type,
-        power_range,
-        coating,
-        lens_index,
+          frame_name,
+          model,
+          color,
+          size,
+          material,
+          gender,
+          rack_for_lenses,
 
-        contact_type,
-        power,
-        base_curve,
-        diameter,
-        expiry_date,
+          lens_type,
+          power_range,
+          coating,
+          lens_index,
 
-        accessory_name,
+          contact_type,
+          power,
+          base_curve,
+          diameter,
+          expiry_date,
 
-        purchase_price,
-        selling_price,
-        quantity
-      )
+          accessory_name,
 
-      VALUES
-      (
-        $1,$2,$3,$4,
-        $5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,
-        $15,$16,$17,$18,$19,
-        $20,
-        $21,$22,$23
-      )
+          purchase_price,
+          selling_price,
+          quantity
+        )
 
-      RETURNING *
-      `,
-      [
-        /* 1 */
-        finalStoreCode,
+        VALUES
+        (
+          $1,
+          $2,
 
-        /* 2 */
-        String(category).trim(),
+          $3,
+          $4,
+          $5,
 
-        /* 3 */
-        finalBarcode,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12,
 
-        /* 4 */
-        String(brand).trim(),
+          $13,
+          $14,
+          $15,
+          $16,
 
-        /* 5-10 */
-        frame_name || null,
-        model || null,
-        color || null,
-        size || null,
-        material || null,
-        gender || null,
+          $17,
+          $18,
+          $19,
+          $20,
+          $21,
 
-        /* 11-14 */
-        lens_type || null,
-        power_range || null,
-        coating || null,
-        lens_index || null,
+          $22,
 
-        /* 15-19 */
-        contact_type || null,
-        power || null,
-        base_curve || null,
-        diameter || null,
-        expiry_date || null,
+          $23,
+          $24,
+          $25
+        )
 
-        /* 20 */
-        accessory_name || null,
+        RETURNING *
+        `,
+        [
+          /* =================================================
+             1
+          ================================================= */
 
-        /* 21-23 */
-        Number(purchase_price) || 0,
-        Number(selling_price) || 0,
-        quantityNumber
-      ]
-    );
+          finalStoreCode,
+
+          /* =================================================
+             2
+             ROLE
+          ================================================= */
+
+          finalRole,
+
+          /* =================================================
+             3-5
+          ================================================= */
+
+          String(category).trim(),
+
+          finalBarcode,
+
+          String(brand).trim(),
+
+          /* =================================================
+             6-12
+          ================================================= */
+
+          frame_name
+            ? String(frame_name).trim()
+            : null,
+
+          model
+            ? String(model).trim()
+            : null,
+
+          color
+            ? String(color).trim()
+            : null,
+
+          size
+            ? String(size).trim()
+            : null,
+
+          material
+            ? String(material).trim()
+            : null,
+
+          gender
+            ? String(gender).trim()
+            : null,
+
+          rack_for_lenses
+            ? String(rack_for_lenses).trim()
+            : null,
+
+          /* =================================================
+             13-16
+          ================================================= */
+
+          lens_type
+            ? String(lens_type).trim()
+            : null,
+
+          power_range
+            ? String(power_range).trim()
+            : null,
+
+          coating
+            ? String(coating).trim()
+            : null,
+
+          lens_index
+            ? String(lens_index).trim()
+            : null,
+
+          /* =================================================
+             17-21
+          ================================================= */
+
+          contact_type
+            ? String(contact_type).trim()
+            : null,
+
+          power
+            ? String(power).trim()
+            : null,
+
+          base_curve
+            ? String(base_curve).trim()
+            : null,
+
+          diameter
+            ? String(diameter).trim()
+            : null,
+
+          expiry_date || null,
+
+          /* =================================================
+             22
+          ================================================= */
+
+          accessory_name
+            ? String(accessory_name).trim()
+            : null,
+
+          /* =================================================
+             23-25
+          ================================================= */
+
+          purchasePriceNumber,
+
+          sellingPriceNumber,
+
+          quantityNumber
+        ]
+      );
+
+    /* =========================================================
+       INSERTED STOCK
+    ========================================================= */
+
+    const insertedStock =
+      result.rows[0];
 
     /* =========================================================
        SUCCESS RESPONSE
@@ -521,7 +741,7 @@ router.post("/add", async (req, res) => {
         ? "Stock added successfully by Super Admin"
         : "Stock added successfully",
 
-      role: userRole,
+      role: finalRole,
 
       storeCode: finalStoreCode,
 
@@ -529,18 +749,49 @@ router.post("/add", async (req, res) => {
 
       barcodeImage,
 
-      stock: result.rows[0]
+      stock: insertedStock
     });
 
   } catch (error) {
+
     console.error(
       "ADD STOCK ERROR:",
       error
     );
 
+    /* =======================================================
+       DUPLICATE BARCODE
+    ======================================================= */
+
+    if (error.code === "23505") {
+
+      console.error(
+        "DUPLICATE KEY:",
+        error.detail
+      );
+
+      return res.status(409).json({
+        success: false,
+
+        message:
+          "Barcode already exists. Please generate another barcode.",
+
+        error:
+          process.env.NODE_ENV === "development"
+            ? error.detail
+            : undefined
+      });
+    }
+
+    /* =======================================================
+       OTHER DATABASE ERROR
+    ======================================================= */
+
     return res.status(500).json({
       success: false,
-      message: "Stock adding failed",
+
+      message:
+        "Stock adding failed",
 
       error:
         process.env.NODE_ENV === "development"
