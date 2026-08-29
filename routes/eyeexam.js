@@ -822,19 +822,35 @@ message:"Update failed"
 }
 
 });
-router.put("/super-admin/update-review/:patientId", async (req, res) => {
-  try {
-    const { patientId } = req.params;
+/* ============================================================
+   SUPER ADMIN - ADD FOLLOW-UP / EYE EXAM
+   ============================================================ */
 
+router.post("/super-admin/add-review", async (req, res) => {
+  try {
     const {
+      patient_id,
+      patient_name,
+      mobile_number,
       next_review_date,
       notes,
     } = req.body;
 
-    if (!patientId) {
+    /* ========================================================
+       VALIDATION
+    ======================================================== */
+
+    if (!patient_id) {
       return res.status(400).json({
         success: false,
         message: "Patient ID is required",
+      });
+    }
+
+    if (!patient_name) {
+      return res.status(400).json({
+        success: false,
+        message: "Patient name is required",
       });
     }
 
@@ -845,50 +861,152 @@ router.put("/super-admin/update-review/:patientId", async (req, res) => {
       });
     }
 
+    /* ========================================================
+       INSERT
+    ======================================================== */
+
     const result = await pool.query(
       `
-      UPDATE eye_exams
-      SET
-        next_review_date = $1,
-        notes = $2
-      WHERE patient_id = $3
-        AND LOWER(role) = 'superadmin'
+      INSERT INTO eye_exams (
+        patient_id,
+        patient_name,
+        mobile_number,
+        next_review_date,
+        notes,
+        role
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        'superadmin'
+      )
       RETURNING *
       `,
       [
+        patient_id,
+        patient_name,
+        mobile_number || "",
         next_review_date,
         notes || "",
-        patientId,
       ]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Super Admin eye examination not found for this patient",
-      });
-    }
-
-    res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: "Follow-up updated successfully",
+      message: "Follow-up added successfully",
       exam: result.rows[0],
     });
 
   } catch (error) {
     console.error(
-      "SUPER ADMIN UPDATE FOLLOW-UP ERROR:",
+      "SUPER ADMIN ADD FOLLOW-UP ERROR:",
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Update failed",
+      message: "Failed to add follow-up",
       error: error.message,
     });
   }
 });
+
+
+/* ============================================================
+   SUPER ADMIN - UPDATE FOLLOW-UP
+   IMPORTANT:
+   Update by eye_exams.id, NOT patient_id.
+   ============================================================ */
+
+router.put(
+  "/super-admin/update-review/:examId",
+  async (req, res) => {
+    try {
+      const { examId } = req.params;
+
+      const {
+        next_review_date,
+        notes,
+      } = req.body;
+
+      /* ======================================================
+         VALIDATION
+      ====================================================== */
+
+      if (!examId) {
+        return res.status(400).json({
+          success: false,
+          message: "Eye examination ID is required",
+        });
+      }
+
+      if (!next_review_date) {
+        return res.status(400).json({
+          success: false,
+          message: "Next review date is required",
+        });
+      }
+
+      /* ======================================================
+         UPDATE EXACT RECORD
+      ====================================================== */
+
+      const result = await pool.query(
+        `
+        UPDATE eye_exams
+        SET
+          next_review_date = $1,
+          notes = $2
+        WHERE id = $3
+          AND LOWER(COALESCE(role, '')) = 'superadmin'
+        RETURNING *
+        `,
+        [
+          next_review_date,
+          notes || "",
+          examId,
+        ]
+      );
+
+      /* ======================================================
+         NOT FOUND
+      ====================================================== */
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Super Admin eye examination not found",
+        });
+      }
+
+      /* ======================================================
+         SUCCESS
+      ====================================================== */
+
+      return res.status(200).json({
+        success: true,
+        message: "Follow-up updated successfully",
+        exam: result.rows[0],
+      });
+
+    } catch (error) {
+      console.error(
+        "SUPER ADMIN UPDATE FOLLOW-UP ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Update failed",
+        error: error.message,
+      });
+    }
+  }
+);
 router.put("/followups/complete/:id", async (req, res) => {
   try {
     const { id } = req.params;
