@@ -42,7 +42,7 @@ app.use("/products",Products );
 app.use("/cart",Cart );
 app.use("/orders",PlaceOrders );
 app.use("/salesreport",SalesReports);
-app.use("/Expenses",ExpensesTracker);
+app.use("/expenses",ExpensesTracker);
 
 
 

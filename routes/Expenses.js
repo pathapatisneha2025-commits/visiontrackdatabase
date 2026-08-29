@@ -267,7 +267,7 @@ const ensureTrigger = async () => {
 ============================================================ */
 
 router.post(
-  "/expenses",
+  "/add",
   async (req, res) => {
 
     try {
@@ -533,7 +533,7 @@ router.post(
 ============================================================ */
 
 router.get(
-  "/expenses",
+  "/all",
   async (req, res) => {
 
     try {
@@ -863,7 +863,7 @@ router.get(
 ============================================================ */
 
 router.get(
-  "/expenses/summary",
+  "/summary",
   async (req, res) => {
 
     try {
@@ -1016,7 +1016,7 @@ router.get(
 ============================================================ */
 
 router.get(
-  "/expenses/:id",
+  "/:id",
   async (req, res) => {
 
     try {
@@ -1113,7 +1113,7 @@ router.get(
 ============================================================ */
 
 router.put(
-  "/expenses/:id",
+  "/update/:id",
   async (req, res) => {
 
     try {
@@ -1397,7 +1397,7 @@ router.put(
 ============================================================ */
 
 router.delete(
-  "/expenses/:id",
+  "/delete/:id",
   async (req, res) => {
 
     try {
