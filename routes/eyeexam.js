@@ -822,6 +822,73 @@ message:"Update failed"
 }
 
 });
+router.put("/super-admin/update-review/:patientId", async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    const {
+      next_review_date,
+      notes,
+    } = req.body;
+
+    if (!patientId) {
+      return res.status(400).json({
+        success: false,
+        message: "Patient ID is required",
+      });
+    }
+
+    if (!next_review_date) {
+      return res.status(400).json({
+        success: false,
+        message: "Next review date is required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE eye_exams
+      SET
+        next_review_date = $1,
+        notes = $2
+      WHERE patient_id = $3
+        AND LOWER(role) = 'superadmin'
+      RETURNING *
+      `,
+      [
+        next_review_date,
+        notes || "",
+        patientId,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Super Admin eye examination not found for this patient",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Follow-up updated successfully",
+      exam: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error(
+      "SUPER ADMIN UPDATE FOLLOW-UP ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Update failed",
+      error: error.message,
+    });
+  }
+});
 router.put("/followups/complete/:id", async (req, res) => {
   try {
     const { id } = req.params;
