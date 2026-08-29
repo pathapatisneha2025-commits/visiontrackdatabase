@@ -472,197 +472,206 @@ router.post("/add", async (req, res) => {
        does not exist in stock_inventory.
     ========================================================= */
 
-    const result = await pool.query(
-      `
-      INSERT INTO stock_inventory
-      (
-        store_code,
-        category,
-        barcode,
-        brand,
+    
+const result = await pool.query(
+  `
+  INSERT INTO stock_inventory
+  (
+    role,
+    store_code,
+    category,
+    barcode,
+    brand,
 
-        frame_name,
-        model,
-        color,
-        size,
-        material,
-        gender,
+    frame_name,
+    model,
+    color,
+    size,
+    material,
+    gender,
 
-        lens_type,
-        power_range,
-        coating,
-        lens_index,
+    lens_type,
+    power_range,
+    coating,
+    lens_index,
 
-        contact_type,
-        power,
-        base_curve,
-        diameter,
-        expiry_date,
+    contact_type,
+    power,
+    base_curve,
+    diameter,
+    expiry_date,
 
-        accessory_name,
+    accessory_name,
 
-        purchase_price,
-        selling_price,
-        quantity
-      )
+    purchase_price,
+    selling_price,
+    quantity
+  )
 
-      VALUES
-      (
-        $1,
-        $2,
-        $3,
-        $4,
+  VALUES
+  (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
 
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
+    $6,
+    $7,
+    $8,
+    $9,
+    $10,
+    $11,
 
-        $11,
-        $12,
-        $13,
-        $14,
+    $12,
+    $13,
+    $14,
+    $15,
 
-        $15,
-        $16,
-        $17,
-        $18,
-        $19,
+    $16,
+    $17,
+    $18,
+    $19,
+    $20,
 
-        $20,
+    $21,
 
-        $21,
-        $22,
-        $23
-      )
+    $22,
+    $23,
+    $24
+  )
 
-      RETURNING *
-      `,
-      [
-        /* =====================================================
-           1
-        ===================================================== */
+  RETURNING *
+  `,
+  [
+    /* =====================================================
+       1 - ROLE
+    ===================================================== */
 
-        finalStoreCode,
+    finalRole,
 
-        /* =====================================================
-           2
-        ===================================================== */
+    /* =====================================================
+       2 - STORE CODE
+    ===================================================== */
 
-        String(category).trim(),
+    finalStoreCode,
 
-        /* =====================================================
-           3
-        ===================================================== */
+    /* =====================================================
+       3 - CATEGORY
+    ===================================================== */
 
-        finalBarcode,
+    String(category).trim(),
 
-        /* =====================================================
-           4
-        ===================================================== */
+    /* =====================================================
+       4 - BARCODE
+    ===================================================== */
 
-        String(brand).trim(),
+    finalBarcode,
 
-        /* =====================================================
-           5 - 10
-           FRAME
-        ===================================================== */
+    /* =====================================================
+       5 - BRAND
+    ===================================================== */
 
-        frame_name
-          ? String(frame_name).trim()
-          : null,
+    String(brand).trim(),
 
-        model
-          ? String(model).trim()
-          : null,
+    /* =====================================================
+       6 - 11
+       FRAME
+    ===================================================== */
 
-        color
-          ? String(color).trim()
-          : null,
+    frame_name
+      ? String(frame_name).trim()
+      : null,
 
-        size
-          ? String(size).trim()
-          : null,
+    model
+      ? String(model).trim()
+      : null,
 
-        material
-          ? String(material).trim()
-          : null,
+    color
+      ? String(color).trim()
+      : null,
 
-        gender
-          ? String(gender).trim()
-          : null,
+    size
+      ? String(size).trim()
+      : null,
 
-        /* =====================================================
-           11 - 14
-           LENS
-        ===================================================== */
+    material
+      ? String(material).trim()
+      : null,
 
-        lens_type
-          ? String(lens_type).trim()
-          : null,
+    gender
+      ? String(gender).trim()
+      : null,
 
-        power_range
-          ? String(power_range).trim()
-          : null,
+    /* =====================================================
+       12 - 15
+       LENS
+    ===================================================== */
 
-        coating
-          ? String(coating).trim()
-          : null,
+    lens_type
+      ? String(lens_type).trim()
+      : null,
 
-        lens_index
-          ? String(lens_index).trim()
-          : null,
+    power_range
+      ? String(power_range).trim()
+      : null,
 
-        /* =====================================================
-           15 - 19
-           CONTACT LENS
-        ===================================================== */
+    coating
+      ? String(coating).trim()
+      : null,
 
-        contact_type
-          ? String(contact_type).trim()
-          : null,
+    lens_index
+      ? String(lens_index).trim()
+      : null,
 
-        power
-          ? String(power).trim()
-          : null,
+    /* =====================================================
+       16 - 20
+       CONTACT LENS
+    ===================================================== */
 
-        base_curve
-          ? String(base_curve).trim()
-          : null,
+    contact_type
+      ? String(contact_type).trim()
+      : null,
 
-        diameter
-          ? String(diameter).trim()
-          : null,
+    power
+      ? String(power).trim()
+      : null,
 
-        expiry_date || null,
+    base_curve
+      ? String(base_curve).trim()
+      : null,
 
-        /* =====================================================
-           20
-           ACCESSORY
-        ===================================================== */
+    diameter
+      ? String(diameter).trim()
+      : null,
 
-        accessory_name
-          ? String(accessory_name).trim()
-          : null,
+    expiry_date || null,
 
-        /* =====================================================
-           21 - 23
-           PRICE + QUANTITY
-        ===================================================== */
+    /* =====================================================
+       21 - ACCESSORY
+    ===================================================== */
 
-        Number.isFinite(purchasePriceNumber)
-          ? purchasePriceNumber
-          : 0,
+    accessory_name
+      ? String(accessory_name).trim()
+      : null,
 
-        Number.isFinite(sellingPriceNumber)
-          ? sellingPriceNumber
-          : 0,
+    /* =====================================================
+       22 - 24
+       PRICE + QUANTITY
+    ===================================================== */
 
-        quantityNumber
-      ]
-    );
+    Number.isFinite(purchasePriceNumber)
+      ? purchasePriceNumber
+      : 0,
+
+    Number.isFinite(sellingPriceNumber)
+      ? sellingPriceNumber
+      : 0,
+
+    quantityNumber
+  ]
+);
+
 
     /* =========================================================
        SUCCESS
