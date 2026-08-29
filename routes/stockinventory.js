@@ -264,7 +264,7 @@ router.post("/add", async (req, res) => {
     ========================================================= */
 
     if (!hasStoreCode) {
-      userRole = "super_admin";
+      userRole = "superadmin";
       isSuperAdmin = true;
       finalStoreCode = null;
     }
