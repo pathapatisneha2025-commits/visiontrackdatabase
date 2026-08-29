@@ -451,6 +451,37 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+/* =========================================================
+   GET ALL SUPER ADMIN STOCK
+   ========================================================= */
+
+router.get("/super-admin/all", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM stock_inventory
+      WHERE LOWER(role) = 'super_admin'
+      ORDER BY id DESC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      stocks: result.rows
+    });
+
+  } catch (error) {
+    console.error(
+      "GET SUPER ADMIN STOCK ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch Super Admin stock"
+    });
+  }
+});
 
 
 
