@@ -558,7 +558,7 @@ router.get("/super-admin/all", async (req, res) => {
     const result = await pool.query(`
       SELECT *
       FROM stock_inventory
-      WHERE LOWER(role) = 'super_admin'
+      WHERE LOWER(role) = 'superadmin'
       ORDER BY id DESC
     `);
 
