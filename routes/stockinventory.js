@@ -150,63 +150,191 @@ message:"Failed to fetch stock"
 /*
 ADD STOCK
 */
-
 router.post("/add", async (req, res) => {
   try {
     const body = req.body;
 
     const {
       storeCode,
+      role,
+
       category,
       barcode,
       brand,
+
       frame_name,
       model,
       color,
       size,
       material,
       gender,
+
       lens_type,
       power_range,
       coating,
       index: lens_index,
+
       type: contact_type,
       power,
       base_curve,
       diameter,
       expiry_date,
+
       accessory_name,
+
       purchase_price,
       selling_price,
       quantity
     } = body;
 
-    // Generate barcode automatically
-    let finalBarcode = barcode;
+    /* =========================================================
+       ROLE
+    ========================================================= */
 
-    if (!finalBarcode) {
-      finalBarcode = await generateBarcode(storeCode);
+    // If you have authentication middleware, prefer:
+    // const userRole = req.user?.role || role;
+
+    const userRole = req.user?.role || role;
+
+    const isSuperAdmin =
+      String(userRole || "").toLowerCase().replace(/[\s_-]/g, "") ===
+      "superadmin";
+
+    /* =========================================================
+       VALIDATION
+    ========================================================= */
+
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        message: "Category is required"
+      });
+    }
+
+    if (!brand || !String(brand).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Brand is required"
+      });
+    }
+
+    if (
+      quantity === undefined ||
+      quantity === null ||
+      quantity === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity is required"
+      });
+    }
+
+    const quantityNumber = Number(quantity);
+
+    if (
+      !Number.isInteger(quantityNumber) ||
+      quantityNumber <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be a whole number greater than 0"
+      });
+    }
+
+    /* =========================================================
+       STORE CODE LOGIC
+    ========================================================= */
+
+    let finalStoreCode = storeCode || null;
+
+    /*
+      SUPER ADMIN
+      ------------
+      Super Admin can add stock without selecting a store.
+
+      Example:
+      storeCode = null
+      role = "super_admin"
+
+      Database:
+      store_code = NULL
+    */
+
+    if (isSuperAdmin) {
+      finalStoreCode = storeCode || null;
     }
 
     /*
-      Generate Barcode Image
+      OTHER ROLES
+      -----------
+      Store-specific users must provide storeCode.
     */
+
+    else {
+      if (!storeCode || !String(storeCode).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Store code is required"
+        });
+      }
+
+      finalStoreCode = String(storeCode).trim();
+    }
+
+    /* =========================================================
+       GENERATE BARCODE
+    ========================================================= */
+
+    let finalBarcode = barcode;
+
+    if (!finalBarcode) {
+      /*
+        Important:
+        If Super Admin has no storeCode, don't pass undefined
+        into generateBarcode().
+      */
+
+      finalBarcode = await generateBarcode(
+        finalStoreCode || null
+      );
+    }
+
+    if (!finalBarcode) {
+      return res.status(500).json({
+        success: false,
+        message: "Unable to generate barcode"
+      });
+    }
+
+    /* =========================================================
+       GENERATE BARCODE IMAGE
+    ========================================================= */
+
     let barcodeImage = null;
 
     try {
       const png = await bwipjs.toBuffer({
         bcid: "code128",
-        text: finalBarcode,
+        text: String(finalBarcode),
         scale: 3,
         height: 12,
         includetext: true,
         textxalign: "center"
       });
 
-      barcodeImage = `data:image/png;base64,${png.toString("base64")}`;
+      barcodeImage =
+        `data:image/png;base64,${png.toString("base64")}`;
+
     } catch (err) {
-      console.log("Barcode image generation error", err);
+      console.log(
+        "Barcode image generation error:",
+        err
+      );
     }
+
+    /* =========================================================
+       INSERT STOCK
+    ========================================================= */
 
     const result = await pool.query(
       `
@@ -216,26 +344,32 @@ router.post("/add", async (req, res) => {
         category,
         barcode,
         brand,
+
         frame_name,
         model,
         color,
         size,
         material,
         gender,
+
         lens_type,
         power_range,
         coating,
         lens_index,
+
         contact_type,
         power,
         base_curve,
         diameter,
         expiry_date,
+
         accessory_name,
+
         purchase_price,
         selling_price,
         quantity
       )
+
       VALUES
       (
         $1,$2,$3,$4,
@@ -245,53 +379,78 @@ router.post("/add", async (req, res) => {
         $20,
         $21,$22,$23
       )
+
       RETURNING *
       `,
       [
-        storeCode,
+        finalStoreCode,
         category,
         finalBarcode,
-        brand,
-        frame_name,
-        model,
-        color,
-        size,
-        material,
-        gender,
-        lens_type,
-        power_range,
-        coating,
-        lens_index,
-        contact_type,
-        power,
-        base_curve,
-        diameter,
-        expiry_date,
-        accessory_name,
-        purchase_price || 0,
-        selling_price || 0,
-        quantity || 0
+        String(brand).trim(),
+
+        frame_name || null,
+        model || null,
+        color || null,
+        size || null,
+        material || null,
+        gender || null,
+
+        lens_type || null,
+        power_range || null,
+        coating || null,
+        lens_index || null,
+
+        contact_type || null,
+        power || null,
+        base_curve || null,
+        diameter || null,
+        expiry_date || null,
+
+        accessory_name || null,
+
+        Number(purchase_price) || 0,
+        Number(selling_price) || 0,
+        quantityNumber
       ]
     );
 
-    res.json({
+    /* =========================================================
+       SUCCESS
+    ========================================================= */
+
+    return res.status(201).json({
       success: true,
-      message: "Stock added successfully",
+      message: isSuperAdmin
+        ? "Stock added successfully by Super Admin"
+        : "Stock added successfully",
+
+      role: userRole || null,
+
+      storeCode: finalStoreCode,
+
       barcode: finalBarcode,
+
       barcodeImage,
+
       stock: result.rows[0]
     });
 
   } catch (error) {
-    console.log(error);
+    console.error(
+      "ADD STOCK ERROR:",
+      error
+    );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Stock adding failed"
+      message: "Stock adding failed",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : undefined
     });
   }
 });
-
 
 
 
