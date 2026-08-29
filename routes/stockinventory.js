@@ -152,7 +152,7 @@ ADD STOCK
 */
 router.post("/add", async (req, res) => {
   try {
-    const body = req.body;
+    const body = req.body || {};
 
     const {
       storeCode,
@@ -188,28 +188,96 @@ router.post("/add", async (req, res) => {
     } = body;
 
     /* =========================================================
-       ROLE
+       ROLE + STORE CODE LOGIC
     ========================================================= */
 
-    // If you have authentication middleware, prefer:
-    // const userRole = req.user?.role || role;
+    /*
+      If storeCode is NOT provided:
+        role = super_admin
+        store_code = NULL
 
-    const userRole = req.user?.role || role;
+      If storeCode IS provided:
+        use the provided role/store
+    */
 
-    const isSuperAdmin =
-      String(userRole || "").toLowerCase().replace(/[\s_-]/g, "") ===
-      "superadmin";
+    const hasStoreCode =
+      storeCode !== undefined &&
+      storeCode !== null &&
+      String(storeCode).trim() !== "";
+
+    let userRole = req.user?.role || role || "";
+
+    let isSuperAdmin = false;
+
+    let finalStoreCode = null;
 
     /* =========================================================
-       VALIDATION
+       NO STORE CODE = SUPER ADMIN
     ========================================================= */
 
-    if (!category) {
+    if (!hasStoreCode) {
+      userRole = "super_admin";
+      isSuperAdmin = true;
+      finalStoreCode = null;
+    }
+
+    /* =========================================================
+       STORE CODE EXISTS
+    ========================================================= */
+
+    else {
+      finalStoreCode = String(storeCode).trim();
+
+      const normalizedRole = String(userRole || "")
+        .toLowerCase()
+        .replace(/[\s_-]/g, "");
+
+      isSuperAdmin =
+        normalizedRole === "superadmin";
+
+      /*
+        If role is explicitly Super Admin,
+        store code can still be provided.
+      */
+
+      if (isSuperAdmin) {
+        userRole = "superadmin";
+      }
+    }
+
+    /* =========================================================
+       DEBUG
+    ========================================================= */
+
+    console.log("====================================");
+    console.log("ADD STOCK");
+    console.log("====================================");
+
+    console.log("REQUEST ROLE:", role);
+    console.log("AUTH ROLE:", req.user?.role || null);
+    console.log("STORE CODE:", storeCode);
+
+    console.log("HAS STORE CODE:", hasStoreCode);
+    console.log("FINAL ROLE:", userRole);
+    console.log("IS SUPER ADMIN:", isSuperAdmin);
+    console.log("FINAL STORE CODE:", finalStoreCode);
+
+    console.log("====================================");
+
+    /* =========================================================
+       CATEGORY VALIDATION
+    ========================================================= */
+
+    if (!category || !String(category).trim()) {
       return res.status(400).json({
         success: false,
         message: "Category is required"
       });
     }
+
+    /* =========================================================
+       BRAND VALIDATION
+    ========================================================= */
 
     if (!brand || !String(brand).trim()) {
       return res.status(400).json({
@@ -217,6 +285,10 @@ router.post("/add", async (req, res) => {
         message: "Brand is required"
       });
     }
+
+    /* =========================================================
+       QUANTITY VALIDATION
+    ========================================================= */
 
     if (
       quantity === undefined ||
@@ -237,48 +309,9 @@ router.post("/add", async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "Quantity must be a whole number greater than 0"
+        message:
+          "Quantity must be a whole number greater than 0"
       });
-    }
-
-    /* =========================================================
-       STORE CODE LOGIC
-    ========================================================= */
-
-    let finalStoreCode = storeCode || null;
-
-    /*
-      SUPER ADMIN
-      ------------
-      Super Admin can add stock without selecting a store.
-
-      Example:
-      storeCode = null
-      role = "super_admin"
-
-      Database:
-      store_code = NULL
-    */
-
-    if (isSuperAdmin) {
-      finalStoreCode = storeCode || null;
-    }
-
-    /*
-      OTHER ROLES
-      -----------
-      Store-specific users must provide storeCode.
-    */
-
-    else {
-      if (!storeCode || !String(storeCode).trim()) {
-        return res.status(400).json({
-          success: false,
-          message: "Store code is required"
-        });
-      }
-
-      finalStoreCode = String(storeCode).trim();
     }
 
     /* =========================================================
@@ -287,17 +320,18 @@ router.post("/add", async (req, res) => {
 
     let finalBarcode = barcode;
 
-    if (!finalBarcode) {
-      /*
-        Important:
-        If Super Admin has no storeCode, don't pass undefined
-        into generateBarcode().
-      */
-
+    if (
+      !finalBarcode ||
+      !String(finalBarcode).trim()
+    ) {
       finalBarcode = await generateBarcode(
-        finalStoreCode || null
+        finalStoreCode
       );
     }
+
+    /* =========================================================
+       BARCODE VALIDATION
+    ========================================================= */
 
     if (!finalBarcode) {
       return res.status(500).json({
@@ -305,6 +339,8 @@ router.post("/add", async (req, res) => {
         message: "Unable to generate barcode"
       });
     }
+
+    finalBarcode = String(finalBarcode).trim();
 
     /* =========================================================
        GENERATE BARCODE IMAGE
@@ -326,7 +362,7 @@ router.post("/add", async (req, res) => {
         `data:image/png;base64,${png.toString("base64")}`;
 
     } catch (err) {
-      console.log(
+      console.error(
         "Barcode image generation error:",
         err
       );
@@ -383,11 +419,19 @@ router.post("/add", async (req, res) => {
       RETURNING *
       `,
       [
+        /* 1 */
         finalStoreCode,
-        category,
+
+        /* 2 */
+        String(category).trim(),
+
+        /* 3 */
         finalBarcode,
+
+        /* 4 */
         String(brand).trim(),
 
+        /* 5-10 */
         frame_name || null,
         model || null,
         color || null,
@@ -395,19 +439,23 @@ router.post("/add", async (req, res) => {
         material || null,
         gender || null,
 
+        /* 11-14 */
         lens_type || null,
         power_range || null,
         coating || null,
         lens_index || null,
 
+        /* 15-19 */
         contact_type || null,
         power || null,
         base_curve || null,
         diameter || null,
         expiry_date || null,
 
+        /* 20 */
         accessory_name || null,
 
+        /* 21-23 */
         Number(purchase_price) || 0,
         Number(selling_price) || 0,
         quantityNumber
@@ -415,16 +463,17 @@ router.post("/add", async (req, res) => {
     );
 
     /* =========================================================
-       SUCCESS
+       SUCCESS RESPONSE
     ========================================================= */
 
     return res.status(201).json({
       success: true,
+
       message: isSuperAdmin
         ? "Stock added successfully by Super Admin"
         : "Stock added successfully",
 
-      role: userRole || null,
+      role: userRole,
 
       storeCode: finalStoreCode,
 
@@ -444,6 +493,7 @@ router.post("/add", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Stock adding failed",
+
       error:
         process.env.NODE_ENV === "development"
           ? error.message
