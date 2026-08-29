@@ -487,6 +487,41 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+// =========================================================
+// GET ALL SUPERADMIN OPTICAL ORDERS
+// =========================================================
+
+router.get("/superadmin", async (req, res) => {
+  try {
+
+    const result = await pool.query(`
+      SELECT *
+      FROM optical_orders
+      WHERE store_code IS NULL
+      ORDER BY id DESC
+    `);
+
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      orders: result.rows
+    });
+
+  } catch (error) {
+
+    console.log(
+      "GET SUPERADMIN OPTICAL ORDERS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching superadmin orders",
+      error: error.message
+    });
+
+  }
+});
 
 router.get("/delete-history", async(req,res)=>{
 
