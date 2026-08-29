@@ -198,6 +198,7 @@ message:"Failed to fetch stock"
 /*
 ADD STOCK
 */
+
 router.post("/add", async (req, res) => {
   try {
     const body = req.body || {};
@@ -216,7 +217,6 @@ router.post("/add", async (req, res) => {
       size,
       material,
       gender,
-      rack_for_lenses,
 
       lens_type,
       power_range,
@@ -237,84 +237,42 @@ router.post("/add", async (req, res) => {
     } = body;
 
     /* =========================================================
-       STORE CODE CHECK
-    ========================================================= */
-
-    const hasStoreCode =
-      storeCode !== undefined &&
-      storeCode !== null &&
-      String(storeCode).trim() !== "";
-
-    /* =========================================================
        ROLE
     ========================================================= */
 
-    /*
-      Priority:
-      1. req.user.role if authentication middleware exists
-      2. role from request body
-
-      Accepted:
-      superadmin
-      super_admin
-      super admin
-    */
-
-    let userRole = String(
-      req.user?.role || role || ""
-    ).trim();
-
-    const normalizedRole = userRole
+    const requestRole = String(
+      role || req.user?.role || ""
+    )
+      .trim()
       .toLowerCase()
       .replace(/[\s_-]/g, "");
 
     const isSuperAdmin =
-      normalizedRole === "superadmin";
+      requestRole === "superadmin";
+
+    const finalRole = isSuperAdmin
+      ? "superadmin"
+      : requestRole || "admin";
 
     /* =========================================================
-       FINAL ROLE + STORE
+       STORE CODE
+       
+       SUPER ADMIN:
+         store_code = NULL
+
+       NORMAL USER:
+         use provided storeCode
     ========================================================= */
 
-    let finalRole = "";
     let finalStoreCode = null;
 
-    if (isSuperAdmin) {
-      /*
-        Always save exactly:
-        superadmin
-      */
-      finalRole = "superadmin";
-
-      /*
-        Super Admin without store:
-        store_code = NULL
-      */
-      if (!hasStoreCode) {
-        finalStoreCode = null;
-      }
-
-      /*
-        Super Admin with store:
-        keep selected store
-      */
-      else {
-        finalStoreCode =
-          String(storeCode).trim();
-      }
-    } else {
-      /*
-        Normal user
-      */
-      finalRole = userRole || "admin";
-
-      /*
-        Normal users require/use store code
-      */
-      if (hasStoreCode) {
-        finalStoreCode =
-          String(storeCode).trim();
-      } else {
-        finalStoreCode = null;
+    if (!isSuperAdmin) {
+      if (
+        storeCode !== undefined &&
+        storeCode !== null &&
+        String(storeCode).trim() !== ""
+      ) {
+        finalStoreCode = String(storeCode).trim();
       }
     }
 
@@ -326,11 +284,9 @@ router.post("/add", async (req, res) => {
     console.log("ADD STOCK");
     console.log("====================================");
 
-    console.log(
-      "REQUEST BODY ROLE:",
-      role
-    );
+    console.log("REQUEST BODY:", body);
 
+    console.log("REQUEST ROLE:", role);
     console.log(
       "AUTH ROLE:",
       req.user?.role || null
@@ -338,17 +294,17 @@ router.post("/add", async (req, res) => {
 
     console.log(
       "NORMALIZED ROLE:",
-      normalizedRole
-    );
-
-    console.log(
-      "IS SUPER ADMIN:",
-      isSuperAdmin
+      requestRole
     );
 
     console.log(
       "FINAL ROLE:",
       finalRole
+    );
+
+    console.log(
+      "IS SUPER ADMIN:",
+      isSuperAdmin
     );
 
     console.log(
@@ -406,8 +362,7 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    const quantityNumber =
-      Number(quantity);
+    const quantityNumber = Number(quantity);
 
     if (
       !Number.isInteger(quantityNumber) ||
@@ -421,7 +376,7 @@ router.post("/add", async (req, res) => {
     }
 
     /* =========================================================
-       PRICE VALIDATION
+       PRICE VALUES
     ========================================================= */
 
     const purchasePriceNumber =
@@ -438,28 +393,14 @@ router.post("/add", async (req, res) => {
         ? 0
         : Number(selling_price);
 
-    if (
-      Number.isNaN(purchasePriceNumber) ||
-      purchasePriceNumber < 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid purchase price"
-      });
-    }
-
-    if (
-      Number.isNaN(sellingPriceNumber) ||
-      sellingPriceNumber < 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid selling price"
-      });
-    }
-
     /* =========================================================
-       GENERATE BARCODE
+       BARCODE
+       
+       SUPER ADMIN:
+         generate barcode independently
+
+       NORMAL STORE:
+         generate barcode for that store
     ========================================================= */
 
     let finalBarcode = barcode;
@@ -469,9 +410,7 @@ router.post("/add", async (req, res) => {
       !String(finalBarcode).trim()
     ) {
       finalBarcode =
-        await generateBarcode(
-          finalStoreCode
-        );
+        await generateBarcode(finalStoreCode);
     }
 
     /* =========================================================
@@ -484,8 +423,7 @@ router.post("/add", async (req, res) => {
     ) {
       return res.status(500).json({
         success: false,
-        message:
-          "Unable to generate barcode"
+        message: "Unable to generate barcode"
       });
     }
 
@@ -519,220 +457,229 @@ router.post("/add", async (req, res) => {
           "base64"
         )}`;
 
-    } catch (err) {
+    } catch (barcodeImageError) {
       console.error(
-        "Barcode image generation error:",
-        err
+        "BARCODE IMAGE ERROR:",
+        barcodeImageError
       );
     }
 
     /* =========================================================
        INSERT STOCK
+       
+       IMPORTANT:
+       rack_for_lenses REMOVED because that column
+       does not exist in stock_inventory.
     ========================================================= */
 
-    const result =
-      await pool.query(
-        `
-        INSERT INTO stock_inventory
-        (
-          store_code,
-          role,
+    const result = await pool.query(
+      `
+      INSERT INTO stock_inventory
+      (
+        store_code,
+        category,
+        barcode,
+        brand,
 
-          category,
-          barcode,
-          brand,
+        frame_name,
+        model,
+        color,
+        size,
+        material,
+        gender,
 
-          frame_name,
-          model,
-          color,
-          size,
-          material,
-          gender,
-          rack_for_lenses,
+        lens_type,
+        power_range,
+        coating,
+        lens_index,
 
-          lens_type,
-          power_range,
-          coating,
-          lens_index,
+        contact_type,
+        power,
+        base_curve,
+        diameter,
+        expiry_date,
 
-          contact_type,
-          power,
-          base_curve,
-          diameter,
-          expiry_date,
+        accessory_name,
 
-          accessory_name,
+        purchase_price,
+        selling_price,
+        quantity
+      )
 
-          purchase_price,
-          selling_price,
-          quantity
-        )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4,
 
-        VALUES
-        (
-          $1,
-          $2,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
 
-          $3,
-          $4,
-          $5,
+        $11,
+        $12,
+        $13,
+        $14,
 
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          $11,
-          $12,
+        $15,
+        $16,
+        $17,
+        $18,
+        $19,
 
-          $13,
-          $14,
-          $15,
-          $16,
+        $20,
 
-          $17,
-          $18,
-          $19,
-          $20,
-          $21,
+        $21,
+        $22,
+        $23
+      )
 
-          $22,
+      RETURNING *
+      `,
+      [
+        /* =====================================================
+           1
+        ===================================================== */
 
-          $23,
-          $24,
-          $25
-        )
+        finalStoreCode,
 
-        RETURNING *
-        `,
-        [
-          /* =================================================
-             1
-          ================================================= */
+        /* =====================================================
+           2
+        ===================================================== */
 
-          finalStoreCode,
+        String(category).trim(),
 
-          /* =================================================
-             2
-             ROLE
-          ================================================= */
+        /* =====================================================
+           3
+        ===================================================== */
 
-          finalRole,
+        finalBarcode,
 
-          /* =================================================
-             3-5
-          ================================================= */
+        /* =====================================================
+           4
+        ===================================================== */
 
-          String(category).trim(),
+        String(brand).trim(),
 
-          finalBarcode,
+        /* =====================================================
+           5 - 10
+           FRAME
+        ===================================================== */
 
-          String(brand).trim(),
+        frame_name
+          ? String(frame_name).trim()
+          : null,
 
-          /* =================================================
-             6-12
-          ================================================= */
+        model
+          ? String(model).trim()
+          : null,
 
-          frame_name
-            ? String(frame_name).trim()
-            : null,
+        color
+          ? String(color).trim()
+          : null,
 
-          model
-            ? String(model).trim()
-            : null,
+        size
+          ? String(size).trim()
+          : null,
 
-          color
-            ? String(color).trim()
-            : null,
+        material
+          ? String(material).trim()
+          : null,
 
-          size
-            ? String(size).trim()
-            : null,
+        gender
+          ? String(gender).trim()
+          : null,
 
-          material
-            ? String(material).trim()
-            : null,
+        /* =====================================================
+           11 - 14
+           LENS
+        ===================================================== */
 
-          gender
-            ? String(gender).trim()
-            : null,
+        lens_type
+          ? String(lens_type).trim()
+          : null,
 
-          rack_for_lenses
-            ? String(rack_for_lenses).trim()
-            : null,
+        power_range
+          ? String(power_range).trim()
+          : null,
 
-          /* =================================================
-             13-16
-          ================================================= */
+        coating
+          ? String(coating).trim()
+          : null,
 
-          lens_type
-            ? String(lens_type).trim()
-            : null,
+        lens_index
+          ? String(lens_index).trim()
+          : null,
 
-          power_range
-            ? String(power_range).trim()
-            : null,
+        /* =====================================================
+           15 - 19
+           CONTACT LENS
+        ===================================================== */
 
-          coating
-            ? String(coating).trim()
-            : null,
+        contact_type
+          ? String(contact_type).trim()
+          : null,
 
-          lens_index
-            ? String(lens_index).trim()
-            : null,
+        power
+          ? String(power).trim()
+          : null,
 
-          /* =================================================
-             17-21
-          ================================================= */
+        base_curve
+          ? String(base_curve).trim()
+          : null,
 
-          contact_type
-            ? String(contact_type).trim()
-            : null,
+        diameter
+          ? String(diameter).trim()
+          : null,
 
-          power
-            ? String(power).trim()
-            : null,
+        expiry_date || null,
 
-          base_curve
-            ? String(base_curve).trim()
-            : null,
+        /* =====================================================
+           20
+           ACCESSORY
+        ===================================================== */
 
-          diameter
-            ? String(diameter).trim()
-            : null,
+        accessory_name
+          ? String(accessory_name).trim()
+          : null,
 
-          expiry_date || null,
+        /* =====================================================
+           21 - 23
+           PRICE + QUANTITY
+        ===================================================== */
 
-          /* =================================================
-             22
-          ================================================= */
+        Number.isFinite(purchasePriceNumber)
+          ? purchasePriceNumber
+          : 0,
 
-          accessory_name
-            ? String(accessory_name).trim()
-            : null,
+        Number.isFinite(sellingPriceNumber)
+          ? sellingPriceNumber
+          : 0,
 
-          /* =================================================
-             23-25
-          ================================================= */
-
-          purchasePriceNumber,
-
-          sellingPriceNumber,
-
-          quantityNumber
-        ]
-      );
+        quantityNumber
+      ]
+    );
 
     /* =========================================================
-       INSERTED STOCK
+       SUCCESS
     ========================================================= */
 
-    const insertedStock =
-      result.rows[0];
-
-    /* =========================================================
-       SUCCESS RESPONSE
-    ========================================================= */
+    console.log("====================================");
+    console.log("STOCK INSERT SUCCESS");
+    console.log("ROLE:", finalRole);
+    console.log(
+      "STORE CODE:",
+      finalStoreCode
+    );
+    console.log(
+      "BARCODE:",
+      finalBarcode
+    );
+    console.log("====================================");
 
     return res.status(201).json({
       success: true,
@@ -743,39 +690,40 @@ router.post("/add", async (req, res) => {
 
       role: finalRole,
 
+      isSuperAdmin,
+
       storeCode: finalStoreCode,
 
       barcode: finalBarcode,
 
       barcodeImage,
 
-      stock: insertedStock
+      stock: result.rows[0]
     });
 
   } catch (error) {
+
+    console.error(
+      "===================================="
+    );
 
     console.error(
       "ADD STOCK ERROR:",
       error
     );
 
-    /* =======================================================
+    console.error(
+      "====================================");
+
+    /* =========================================================
        DUPLICATE BARCODE
-    ======================================================= */
+    ========================================================= */
 
     if (error.code === "23505") {
-
-      console.error(
-        "DUPLICATE KEY:",
-        error.detail
-      );
-
       return res.status(409).json({
         success: false,
-
         message:
-          "Barcode already exists. Please generate another barcode.",
-
+          "Barcode already exists. Please try again.",
         error:
           process.env.NODE_ENV === "development"
             ? error.detail
@@ -783,15 +731,14 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    /* =======================================================
+    /* =========================================================
        OTHER DATABASE ERROR
-    ======================================================= */
+    ========================================================= */
 
     return res.status(500).json({
       success: false,
 
-      message:
-        "Stock adding failed",
+      message: "Stock adding failed",
 
       error:
         process.env.NODE_ENV === "development"
@@ -800,6 +747,8 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+
+
 /* =========================================================
    GET ALL SUPER ADMIN STOCK
    ========================================================= */
