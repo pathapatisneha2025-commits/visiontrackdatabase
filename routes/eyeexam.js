@@ -373,6 +373,59 @@ router.get("/super-admin", async (req, res) => {
     });
   }
 });
+
+// ============================================================
+// GET SUPER ADMIN EYE EXAM BY ID
+// GET /eyeexam/super-admin/:id
+// ============================================================
+
+router.get("/super-admin/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Eye examination ID is required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM eye_exams
+      WHERE id = $1
+        AND LOWER(role) = 'superadmin'
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Super Admin eye examination not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      exam: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error(
+      "GET SUPER ADMIN EYE EXAM BY ID ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Error fetching Super Admin eye examination",
+      error: error.message,
+    });
+  }
+});
 /*
 GET PATIENT EYE EXAM HISTORY
 */
