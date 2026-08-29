@@ -33,45 +33,93 @@ Starts from 101.
 No 001, 002, 003...
 ===========================================================
 */
-
-const generateBarcode = async (storeCode) => {
+const generateBarcode = async (storeCode = null) => {
   try {
-    const result = await pool.query(
-      `
-      SELECT barcode
-      FROM stock_inventory
-      WHERE store_code = $1
-        AND barcode ~ '^[0-9]{3}$'
-        AND CAST(barcode AS INTEGER) >= 101
-      ORDER BY CAST(barcode AS INTEGER) DESC
-      LIMIT 1
-      `,
-      [storeCode]
-    );
+    let result;
+
+    /* =========================================================
+       SUPER ADMIN
+       storeCode = NULL
+       
+       Generate barcode from Super Admin stock only
+       where store_code IS NULL
+    ========================================================= */
+
+    if (
+      storeCode === null ||
+      storeCode === undefined ||
+      String(storeCode).trim() === ""
+    ) {
+      result = await pool.query(`
+        SELECT barcode
+        FROM stock_inventory
+        WHERE store_code IS NULL
+          AND barcode ~ '^[0-9]{3}$'
+          AND CAST(barcode AS INTEGER) >= 101
+        ORDER BY CAST(barcode AS INTEGER) DESC
+        LIMIT 1
+      `);
+    }
+
+    /* =========================================================
+       NORMAL STORE
+       
+       Generate barcode from that store only
+    ========================================================= */
+
+    else {
+      result = await pool.query(
+        `
+        SELECT barcode
+        FROM stock_inventory
+        WHERE store_code = $1
+          AND barcode ~ '^[0-9]{3}$'
+          AND CAST(barcode AS INTEGER) >= 101
+        ORDER BY CAST(barcode AS INTEGER) DESC
+        LIMIT 1
+        `,
+        [String(storeCode).trim()]
+      );
+    }
+
+    /* =========================================================
+       START BARCODE
+    ========================================================= */
 
     let nextNumber = 101;
 
     if (result.rows.length > 0) {
-      const lastBarcode = parseInt(result.rows[0].barcode, 10);
+      const lastBarcode = parseInt(
+        result.rows[0].barcode,
+        10
+      );
 
       if (!isNaN(lastBarcode)) {
         nextNumber = lastBarcode + 1;
       }
     }
 
-    // Maximum barcode is 999
+    /* =========================================================
+       MAXIMUM
+    ========================================================= */
+
     if (nextNumber > 999) {
-      throw new Error("Maximum 3-digit barcode limit reached");
+      throw new Error(
+        "Maximum 3-digit barcode limit reached"
+      );
     }
 
     return String(nextNumber);
 
   } catch (error) {
-    console.error("Barcode generation error:", error);
+    console.error(
+      "Barcode generation error:",
+      error
+    );
+
     throw error;
   }
 };
-
 
 
 /*
