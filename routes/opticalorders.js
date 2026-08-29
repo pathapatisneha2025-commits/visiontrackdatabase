@@ -1049,6 +1049,178 @@ router.put("/payment/:id", async (req, res) => {
     });
   }
 });
+
+router.put(
+  "/super-admin/payment/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const {
+        advance_paid,
+        balance_paid_date,
+      } = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: "Order ID is required",
+        });
+      }
+
+      if (
+        advance_paid === undefined ||
+        advance_paid === null
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Advance paid amount is required",
+        });
+      }
+
+      // =====================================================
+      // GET ORDER
+      // =====================================================
+
+      const orderResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            total_amount,
+            advance_paid,
+            balance_amount,
+            payment_status,
+            status
+          FROM optical_orders
+          WHERE id = $1
+          `,
+          [id]
+        );
+
+      if (orderResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      const order = orderResult.rows[0];
+
+      // =====================================================
+      // CALCULATE PAYMENT
+      // =====================================================
+
+      const totalAmount = Number(
+        order.total_amount || 0
+      );
+
+      const paidAmount = Number(
+        advance_paid || 0
+      );
+
+      const balanceAmount = Math.max(
+        totalAmount - paidAmount,
+        0
+      );
+
+      // =====================================================
+      // PAYMENT STATUS
+      // =====================================================
+
+      const paymentStatus =
+        paidAmount >= totalAmount
+          ? "Paid"
+          : "Due";
+
+      // =====================================================
+      // ORDER STATUS
+      // =====================================================
+
+      const orderStatus =
+        paidAmount >= totalAmount
+          ? "Completed"
+          : "Pending";
+
+      // =====================================================
+      // BALANCE PAID DATE
+      // ONLY WHEN FULLY PAID
+      // =====================================================
+
+      const paidDate =
+        paidAmount >= totalAmount
+          ? (
+              balance_paid_date ||
+              new Date()
+            )
+          : null;
+
+      // =====================================================
+      // UPDATE
+      // NO STORE CODE USED
+      // =====================================================
+
+      await pool.query(
+        `
+        UPDATE optical_orders
+        SET
+          advance_paid = $1,
+          balance_amount = $2,
+          payment_status = $3,
+          status = $4,
+          balance_paid_date = $5
+        WHERE id = $6
+        `,
+        [
+          paidAmount,
+          balanceAmount,
+          paymentStatus,
+          orderStatus,
+          paidDate,
+          id,
+        ]
+      );
+
+      // =====================================================
+      // RESPONSE
+      // =====================================================
+
+      return res.json({
+        success: true,
+
+        message:
+          "Super Admin payment updated successfully",
+
+        payment_status:
+          paymentStatus,
+
+        status:
+          orderStatus,
+
+        advance_paid:
+          paidAmount,
+
+        balance_amount:
+          balanceAmount,
+
+        balance_paid_date:
+          paidDate,
+      });
+
+    } catch (err) {
+      console.log(
+        "Super Admin payment update error:",
+        err
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Super Admin payment update failed",
+      });
+    }
+  }
+);
 /*
 UPDATE ORDER STATUS
 */
