@@ -522,7 +522,223 @@ router.get("/superadmin", async (req, res) => {
 
   }
 });
+// ============================================================
+// UPDATE SUPERADMIN OPTICAL ORDER
+// PUT /opticalorders/superadmin/:id
+// ONLY SUPERADMIN CAN UPDATE
+// ============================================================
 
+router.put("/superadmin/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // ========================================================
+    // ROLE CHECK
+    // ========================================================
+
+    const role = String(req.user?.role || "")
+      .trim()
+      .toLowerCase();
+
+    if (role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Superadmin only."
+      });
+    }
+
+    // ========================================================
+    // VALIDATE ORDER ID
+    // ========================================================
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID is required"
+      });
+    }
+
+    // ========================================================
+    // REQUEST BODY
+    // ========================================================
+
+    const {
+      patient_name,
+      patient_id,
+      mobile_number,
+      product_name,
+      product_id,
+      quantity,
+      lens_type,
+      frame_type,
+      total_amount,
+      paid_amount,
+      balance_amount,
+      status,
+      notes
+    } = req.body;
+
+    // ========================================================
+    // VALIDATE PATIENT ID
+    // ========================================================
+
+    if (
+      patient_id !== undefined &&
+      patient_id !== null &&
+      String(patient_id).trim() === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Patient ID cannot be empty"
+      });
+    }
+
+    // ========================================================
+    // CHECK EXISTING SUPERADMIN ORDER
+    // ========================================================
+
+    const existing = await pool.query(
+      `
+      SELECT *
+      FROM optical_orders
+      WHERE id = $1
+        AND store_code IS NULL
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Superadmin optical order not found"
+      });
+    }
+
+    // ========================================================
+    // UPDATE ORDER
+    // ========================================================
+
+    const result = await pool.query(
+      `
+      UPDATE optical_orders
+      SET
+        patient_name = COALESCE($1, patient_name),
+        patient_id = COALESCE($2, patient_id),
+        mobile_number = COALESCE($3, mobile_number),
+
+        product_name = COALESCE($4, product_name),
+        product_id = COALESCE($5, product_id),
+        quantity = COALESCE($6, quantity),
+
+        lens_type = COALESCE($7, lens_type),
+        frame_type = COALESCE($8, frame_type),
+
+        total_amount = COALESCE($9, total_amount),
+        paid_amount = COALESCE($10, paid_amount),
+        balance_amount = COALESCE($11, balance_amount),
+
+        status = COALESCE($12, status),
+        notes = COALESCE($13, notes),
+
+        updated_at = NOW()
+
+      WHERE id = $14
+        AND store_code IS NULL
+
+      RETURNING *
+      `,
+      [
+        patient_name !== undefined
+          ? patient_name
+          : null,
+
+        patient_id !== undefined
+          ? patient_id
+          : null,
+
+        mobile_number !== undefined
+          ? mobile_number
+          : null,
+
+        product_name !== undefined
+          ? product_name
+          : null,
+
+        product_id !== undefined
+          ? product_id
+          : null,
+
+        quantity !== undefined
+          ? quantity
+          : null,
+
+        lens_type !== undefined
+          ? lens_type
+          : null,
+
+        frame_type !== undefined
+          ? frame_type
+          : null,
+
+        total_amount !== undefined
+          ? total_amount
+          : null,
+
+        paid_amount !== undefined
+          ? paid_amount
+          : null,
+
+        balance_amount !== undefined
+          ? balance_amount
+          : null,
+
+        status !== undefined
+          ? status
+          : null,
+
+        notes !== undefined
+          ? notes
+          : null,
+
+        id
+      ]
+    );
+
+    // ========================================================
+    // SAFETY CHECK
+    // ========================================================
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Optical order not found or cannot be updated"
+      });
+    }
+
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
+    return res.status(200).json({
+      success: true,
+      message: "Optical order updated successfully",
+      order: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error(
+      "UPDATE SUPERADMIN OPTICAL ORDER ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Error updating optical order",
+      error: error.message
+    });
+  }
+});
 router.get("/delete-history", async(req,res)=>{
 
 try{
